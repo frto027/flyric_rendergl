@@ -12,8 +12,9 @@ extern void frg_shutdown();
 extern void frg_fontsize_set(frp_size fontsize);
 extern void frg_screensize_set(frp_size width,frp_size height);
 //return 0 if success
-#define LOAD_ERROR_NONE 0
-#define LOAD_ERROR_FONT -1
+#define FRG_LOAD_ERROR_NONE             0
+#define FRG_LOAD_ERROR_FONT             -1
+#define FRG_LOAD_ERROR_INVALID_FILE     -2
 extern int frg_loadlyric(FT_Library lib,FRPFile * file);
 extern void frg_renderline(FRPLine * line,frp_time time);
 extern void frg_unloadlyrc();
