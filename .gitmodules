@@ -1,0 +1,3 @@
+[submodule "flyric_parser"]
+	path = flyric_parser
+	url = git@github.com:frto027/flyric_parser.git
