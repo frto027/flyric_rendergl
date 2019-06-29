@@ -145,7 +145,8 @@ void frg_change_font(FT_Library lib,FT_Face * face,const char * fontname,int len
         *face = NULL;
     }
     if(*face == NULL)
-        *face = FT_New_Face(lib,frg_default_font_path,0,face);
+        FT_New_Face(lib,frg_default_font_path,0,
+        face);
 }
 void frg_change_font_frp_str(FT_Library lib,FT_Face * face,frp_str font){
     if(!frg_frpfile)
@@ -179,7 +180,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frg_change_font(lib,&face,NULL,0);
     if(!face)
         return FRG_LOAD_ERROR_FONT;
-    
+
     if(!FT_Set_Pixel_Sizes(face,0,frg_fontsize)){
         FT_Done_Face(face);
         return FRG_LOAD_ERROR_FONT;
@@ -197,7 +198,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frp_size pid_font = frp_play_get_property_id(frg_frpfile,"Font");
 
     FRGLines = frpmalloc(sizeof(struct FRGline) * flycseg->flyc.linenumber_all);
-    
+
     frp_size wordcount = 0;
     frp_size texture_count = 0;
     /* font kerning */

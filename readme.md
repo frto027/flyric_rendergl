@@ -13,6 +13,8 @@ Android|`ndk`
 总之先写linux。
 
 # 编译说明
+## Codeblocks IDE
+配置了Codeblocks IDE工程来封装Makefile，运行之前请注意启动参数的配置。
 ## linux
 开发环境是`fedora 30`  
 安装opengl(大概是这样的)

@@ -12,6 +12,8 @@ LIBS += -lm
 
 main_linux.out:main_linux.o flyric_rendergl.o
 	cc -o $@ $+ $(LIBS)
+main_linux_debug.out:main_linux.c glenv.h flyric_rendergl.h flyric_rendergl.c
+	cc -o $@ main_linux.c flyric_rendergl.c $(LIBS) $(INCLUDE_PATH) -g
 main_linux.o:main_linux.c glenv.h flyric_rendergl.h
 	cc -c $(INCLUDE_PATH) main_linux.c
 flyric_rendergl.o:flyric_rendergl.c glenv.h flyric_rendergl.h
