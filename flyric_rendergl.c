@@ -152,15 +152,58 @@ FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
        *skip = 1;
     return 0;
 }
-int frg_clear_index_of_word(){
+/* font id current line used when load lyric */
+int frg_current_font_id = 0;
 
+/* linked list relization for font map */
+struct FRGFontMapNode{
+    FT_UInt word;
+    int fontid;
+    struct FRGFontMapNode * next;
+}*FRGFontMaps = NULL;
+int frg_clear_index_of_word(){
+    while(FRGFontMaps){
+        struct FRGFontMapNode * n = FRGFontMaps->next;
+        frpfree(FRGFontMaps);
+        FRGFontMaps = n;
+    }
 }
 int frg_index_of_word(FT_UInt word,int * isnew){
     static int last = 0;
     if(isnew)
         *isnew = 1;
     //TODO this is a hash map,defferent font should use defferent index!
-    return last++;
+    /* linked list relization.O(n^2).Change it later*/
+    struct FRGFontMapNode * curr = FRGFontMaps;
+    if(curr == NULL){
+        if(isnew)
+            *isnew = 1;
+        curr = FRGFontMaps = frpmalloc(sizeof(struct FRGFontMapNode));
+        curr->fontid = frg_current_font_id;
+        curr->word = word;
+        curr->next = NULL;
+        return 0;
+    }
+    int id = 0;
+
+    while(curr->next && (curr->word != word || curr->fontid != frg_current_font_id)){
+        curr = curr->next;
+        id++;
+    }
+
+    if(curr->word == word && curr->fontid == frg_current_font_id){
+        if(isnew)
+            *isnew = 0;
+        return id;
+    }
+    curr->next = frpmalloc(sizeof(struct FRGFontMapNode));
+    curr = curr->next;
+    curr->fontid = frg_current_font_id;
+    curr->word = word;
+    curr->next = NULL;
+    if(isnew)
+        *isnew = 1;
+    return id+1;
 }
 void frg_change_font(FT_Library lib,FT_Face * face,const char * fontname,int len){
     if(fontname && len < 0){
@@ -178,9 +221,11 @@ void frg_change_font(FT_Library lib,FT_Face * face,const char * fontname,int len
     if(fontname == NULL){
         *face = NULL;
     }
-    if(*face == NULL)
+    if(*face == NULL){
         FT_New_Face(lib,frg_default_font_path,0,
         face);
+        frg_current_font_id = 0;//0 for default font
+        }
 }
 void frg_change_font_frp_str(FT_Library lib,FT_Face * face,frp_str font){
     if(!frg_frpfile)
@@ -289,13 +334,13 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     //malloc
     if(FRGWords)
         frpfree(FRGWords);
-    FRGWords = malloc(sizeof(struct FRGWordInfo) * wordcount);
+    FRGWords = frpmalloc(sizeof(struct FRGWordInfo) * wordcount);
     if(FRGWordTextureLocales)
         frpfree(FRGWordTextureLocales);
-    FRGWordTextureLocales = malloc(sizeof(struct FRGWordTextureInfo) * texture_count);
+    FRGWordTextureLocales = frpmalloc(sizeof(struct FRGWordTextureInfo) * texture_count);
     if(FRGNodeProperties)
         frpfree(FRGNodeProperties);
-    FRGNodeProperties = malloc(sizeof(struct FRGNodeProperty) * max_node_count);
+    FRGNodeProperties = frpmalloc(sizeof(struct FRGNodeProperty) * max_node_count);
 
     frp_size mxsize = 1;
     while(mxsize < texture_next_tail)
@@ -411,10 +456,12 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 }
 void frg_renderline(FRPLine * line,frp_time time){
 
+
+    /* debug only,never do this please... */
     glBindVertexArray(varry);
     glDrawArrays(GL_TRIANGLE_FAN,0,4);
 
-    /* debug only,never do this please... */
+
     float tim = time / 10000.;
     tim -= 1;
     float yoff = -1;
