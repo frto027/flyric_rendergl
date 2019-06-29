@@ -15,34 +15,8 @@ Shake,ColorG,
 [flyc]
 Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY
 line,0,between,Empty,,1,1,1,,0,0,0,0,0,0.5,0.5,0.5,0.5
-
 line,2000,between,
-word,>10,,T1
-,>>30,,KK
-,,,YY
-,,,ZZ
-,
-line,>500,
-word,,,T2
-line,>1000
-word,,,T3
-line,>1000,1000
-word,,,END
-
-line,0,between,Empty,,1,1,1,,0,0,0,0,0,0.5,0.5,0.5,0.5
-line,2000,between,
-word,>300,,歌词就是这样,
-line,>500,between,
-word,>10,,第二个歌词
-line,5634
-word,,,第三个歌词
-line,7803
-word,,,第四个歌词
-line,9900
-line,10005
-word,,,第五个歌词
-line,2200,800,
-word,,,跨跨跨
+word,>300,,abc一一一一|一一一一一一一一一一一一一一一一一一一一一一一一一一一一一,
 
 #[ly]
 #test segm

@@ -1,6 +1,10 @@
 #include "flyric_rendergl.h"
 #include "glenv.h"
 
+/* debug only*/
+    GLuint buffer,varry;
+
+
 frp_size frg_fontsize = 40;
 
 frp_size frg_scr_width = 800;
@@ -8,6 +12,33 @@ frp_size frg_scr_height = 600;
 
 const char * frg_default_font_path;
 
+frp_bool frg_has_texture = 0;
+GLuint frg_texture = 0;
+
+frp_bool frg_program_loaded = 0;
+GLuint frg_program;
+
+const char * frg_shaders[] = {
+/* vertex shader */
+"#version 310 es\n\
+layout (location = 0) in vec2 in_pos;\
+out vec2 tex_coord;\
+void main(void){\
+    gl_Position = vec4(in_pos,0,1);\
+    tex_coord = vec2(in_pos.x,1.-in_pos.y);\
+}\
+",
+/* fragment shader */
+"#version 310 es\n\
+uniform sampler2D tex;\
+in highp vec2 tex_coord;\
+out highp vec4 color;\
+void main(void){\
+\
+    color = texture(tex,tex_coord).rgbr;\
+}\
+"
+};
 
 FRPFile * frg_frpfile = NULL;
 //=================info of uniform in shader=================
@@ -40,17 +71,20 @@ struct FRGline{
 }*FRGLines = NULL;
 
 void frg_freelines(){
-    if(!FRGLines)
-        return;
-    if(!frg_frpfile)
-        return;
-    FRPSeg * seg = frp_getseg(frg_frpfile,"flyc");
-    if(!seg)
-        return;//can not free
-    if(FRGLines){
-        frpfree(FRGLines);
-        FRGLines = NULL;
+#define FREE(x) do{if(x) {frpfree(x);x=NULL;}}while(0)
+    FREE(FRGWordTextureLocales);
+    FREE(FRGWords);
+    FREE(FRGNodeProperties);
+    if(frg_has_texture){
+        glDeleteTextures(1,&frg_texture);
+        frg_has_texture = 0;
     }
+    if(FRGNodeProperties){
+        //TODO:free lines
+        frpfree(FRGNodeProperties);
+        FRGNodeProperties = NULL;
+    }
+#undef FREE
 }
 //===================utf8 to unicode============
 FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
@@ -181,7 +215,8 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     if(!face)
         return FRG_LOAD_ERROR_FONT;
 
-    if(!FT_Set_Pixel_Sizes(face,0,frg_fontsize)){
+    FT_Error err = FT_Set_Pixel_Sizes(face,0,frg_fontsize);
+    if(FT_Set_Pixel_Sizes(face,0,frg_fontsize) != 0){
         FT_Done_Face(face);
         return FRG_LOAD_ERROR_FONT;
     }
@@ -220,7 +255,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
             while(s.len > 0){
                 int skip;
-                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool,&skip));
+                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool + s.beg,&skip));
                 s.beg += skip;
                 s.len -= skip;
 
@@ -265,8 +300,15 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frp_size mxsize = 1;
     while(mxsize < texture_next_tail)
         mxsize <<=1;
-    glTexStorage2D(GL_TEXTURE_2D,0,GL_R8,FRG_TEXTURE_MAX_WIDTH,mxsize);
+
+    if(!frg_has_texture){
+        glGenTextures(1,&frg_texture);
+    }
+    glBindTexture(GL_TEXTURE_2D,frg_texture);
+    glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA8,FRG_TEXTURE_MAX_WIDTH,mxsize);
+
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+
     //TODO:init texture locale,word id(locale),property id
     //上面和下面的坐标计算必须一致
     frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0;
@@ -281,7 +323,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
             while(s.len > 0){
                 int skip;
-                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool,&skip));
+                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool + s.beg,&skip));
                 s.beg += skip;
                 s.len -= skip;
 
@@ -313,8 +355,64 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
             nodecount++;
         }
     }
+
+    /* load program */
+    if(!frg_program_loaded){
+        frg_program_loaded = 1;
+        frg_program = glCreateProgram();
+        /* vertex shader */
+        GLuint vshader = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(vshader,1,frg_shaders,NULL);
+        glCompileShader(vshader);
+        {
+        char buff[1024];
+        glGetShaderInfoLog(vshader,1024,NULL,buff);
+        if(buff[0])
+            printf("VertexShader compile message:\n%s\n",buff);
+        }
+        glAttachShader(frg_program,vshader);
+        /* fragment shader*/
+        GLuint fshader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fshader,1,frg_shaders + 1,NULL);
+        glCompileShader(fshader);
+        {
+        char buff[1024];
+        glGetShaderInfoLog(fshader,1024,NULL,buff);
+        if(buff[0])
+            printf("FragmentShader compile message:\n%s\n",buff);
+        }
+        glAttachShader(frg_program,fshader);
+        /* program */
+        glLinkProgram(frg_program);
+        glDeleteShader(vshader);
+        glDeleteShader(fshader);
+        {
+        char buff[1024];
+        GLint para;
+        glGetProgramiv(frg_program,GL_LINK_STATUS,&para);
+        glGetProgramInfoLog(frg_program,1024,NULL,buff);
+        if(para != GL_FALSE)
+            printf("Link shader program error message:\n%s\n",buff);
+        }
+        glUseProgram(frg_program);
+    }
+
+    /* debug */
+    GLfloat pts[] = {
+    0,0,1,0,1,1,0,1
+    };
+    glGenBuffers(1,&buffer);
+    glGenVertexArrays(1,&varry);
+    glBindVertexArray(varry);
+    glBindBuffer(GL_ARRAY_BUFFER,buffer);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(pts),pts,GL_STATIC_DRAW);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
+    glEnableVertexAttribArray(0);
 }
 void frg_renderline(FRPLine * line,frp_time time){
+
+    glBindVertexArray(varry);
+    glDrawArrays(GL_TRIANGLE_FAN,0,4);
 
     /* debug only,never do this please... */
     float tim = time / 10000.;
