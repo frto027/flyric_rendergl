@@ -7,18 +7,18 @@ SuperShake(x):SuperShake(x,2)
 
 [anim]
 Name,Property,Func,During,Offset
-Shake,ColorG,SuperShake(x),123,0
-Shake,ColorB,SuperShake(x),123,0
-Shake,ColorG,
+Shake,ColorR,0.2,[Duration] + 1000,0
 
 
 [flyc]
 Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY
-line,0,between,Empty,,1,1,1,,0,0,0,0,0,0.5,0.5,0.5,0.5
+line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
 line,1000,between,
-word,>300,,acda,
-,,,cd
-line,10000,
-word,>1000,,WWW
+word,>300,,abcd,Shake,1,0,0
+,,,ef, ,0,1,0
+line,4000,
+word,>1000,,A Sample ,,0,1,0
+,,,Lyric ,,1,0,0
+,,,Here !\,ok bye~,,0,0,1
 #[ly]
 #test segm

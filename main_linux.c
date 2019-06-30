@@ -28,7 +28,7 @@ int main(int argc,char **argv){
     FT_Library freetypelib;
     FT_Init_FreeType(&freetypelib);
 
-    /* init flyric parser*/
+    /*you MUST init flyric parser before frg_startup*/
     frpstartup();
 
     /* init openGL context */
@@ -88,7 +88,6 @@ int main(int argc,char **argv){
 
         //render line
         for(FRTNode * tnode = frp_play_getline_by_time(file,ftim);tnode;tnode = tnode->next){
-
             frg_renderline(tnode->line,ftim);
         }
         glfwSwapBuffers(window);
