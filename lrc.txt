@@ -16,7 +16,7 @@ Shake,ColorG,
 Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY
 line,0,between,Empty,,1,1,1,,0,0,0,0,0,0.5,0.5,0.5,0.5
 line,2000,between,
-word,>300,,abc一去二三里，一二三四五留在,
+word,>300,,abc一去二三里\,一二三四五留在,
 
 #[ly]
 #test segm

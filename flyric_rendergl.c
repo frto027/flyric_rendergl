@@ -19,13 +19,54 @@ frp_bool frg_program_loaded = 0;
 GLuint frg_program;
 
 const char * frg_shaders[] = {
+/*
+struct TexLocales is FRGWordTextureInfo in C language.
+struct PropInfo is FRGNodeProperty in c lang.
+
+point pos:
+3 2
+0 1
+
+*/
 /* vertex shader */
 "#version 310 es\n\
-layout (location = 0) in vec2 in_pos;\
+struct TexLocales{\
+    vec2 texcoord;\
+    vec2 texsize;\
+};\
+struct PropInfo{\
+    vec2 hxvy;\
+    vec4 color;\
+    vec2 scale;\
+};\
+struct WordInfo{\
+    vec2 hoff;\
+    vec2 voff;\
+    int texid;\
+    int propid;\
+};\
+uniform TexLocales tex_coords[4096];\
+uniform PropInfo props[4096];\
+uniform WordInfo words[300];\
+uniform vec2 screenScale;\
+uniform vec2 vxhy;\
+layout (location = 0) in int pos_mark;\
 out vec2 tex_coord;\
 void main(void){\
-    gl_Position = vec4(in_pos,0,1);\
-    tex_coord = vec2(in_pos.x,1.-in_pos.y);\
+    int tid = words[gl_InstanceID].texid;\
+    int pid = words[gl_InstanceID].propid;\
+    vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[gl_InstanceID].hoff;\
+    \
+    tex_coord = tex_coords[tid].texcoord;\
+    if(pos_mark == 1 || pos_mark == 2){\
+        hpos.x = hpos.x + tex_coords[tid].texsize.x;\
+        tex_coord.x = tex_coord.x + tex_coords[tid].texsize.x;\
+    }\
+    if(pos_mark == 2 || pos_mark == 3){\
+        hpos.y = hpos.y + tex_coords[tid].texsize.y;\
+        tex_coord.y = tex_coord.y + tex_coords[tid].texsize.y;\
+    }\
+    gl_Position = vec4(hpos,0,1);\
 }\
 ",
 /* fragment shader */
@@ -35,7 +76,7 @@ in highp vec2 tex_coord;\
 out highp vec4 color;\
 void main(void){\
 \
-    color = texture(tex,tex_coord).rgbr;\
+    color = texture(tex,tex_coord).rrrr;\
 }\
 "
 };
@@ -44,32 +85,39 @@ FRPFile * frg_frpfile = NULL;
 //=================info of uniform in shader=================
 struct FRGWordTextureInfo{
     float tex_x,tex_y;
-    float tex_width_half,tex_height_half;
+    float tex_width,tex_height;
 }*FRGWordTextureLocales = NULL;//for each word(texture)
 struct FRGWordInfo{
-    float hcenter_x_off,hcenter_y_off;//文字水平布局时候中心距离property_id对应的Node的偏移
-    float vcenter_x_off,vcenter_y_off;//文字垂直布局时候中心巨鹿propryty_id对应的Node的偏移
+    float h_x_off,h_y_off;//文字水平布局时候左下距离property_id对应的Node的偏移
+    float v_x_off,v_y_off;//文字垂直布局时候左下距离propryty_id对应的Node的偏移
     //float half_w,half_h;//文字半宽半高 你为什么不问问word_id对应的FRGWordTextureInfo呢？
     int property_id;
-    int word_id;
+    int tex_id;
 }*FRGWords = NULL;//for each word
-struct FRGNodeProperty{
-    float hcenter_x,hcenter_y;
-    float vcenter_x,vcenter_y;
+struct FRGNodeProperty{//fill it in runtime
+    float h_x/*,h_y*/;//y is the baseline locale(uniform) TODO
+    float /*v_x,*/v_y;//x is the baseline locale(uniform) TODO
     float colorR,colorG,colorB,colorA;
     float scaleX,scaleY;
     //others
 }*FRGNodeProperties = NULL;//for each node
 
+
 int frg_max_word_count = 0;
 
 // ================texture locale of each word=========================
 
+struct FRGLineNodeArgs{
+    float kerning_h_x_off,kerning_v_y_off;
+    float h_width,v_height;
+};
+
 struct FRGline{
     int start_word;//从哪个字开始渲染
     int word_count;//渲染几个字
+    struct FRGLineNodeArgs * node_args;
 }*FRGLines = NULL;
-
+frp_size FRGLinesSize = 0;
 void frg_freelines(){
 #define FREE(x) do{if(x) {frpfree(x);x=NULL;}}while(0)
     FREE(FRGWordTextureLocales);
@@ -79,10 +127,13 @@ void frg_freelines(){
         glDeleteTextures(1,&frg_texture);
         frg_has_texture = 0;
     }
-    if(FRGNodeProperties){
+    if(FRGLines){
         //TODO:free lines
-        frpfree(FRGNodeProperties);
-        FRGNodeProperties = NULL;
+        for(frp_size i = 0;i<FRGLinesSize;i++)
+            frpfree(FRGLines[i].node_args);
+        frpfree(FRGLines);
+        FRGLinesSize = 0;
+        FRGLines = NULL;
     }
 #undef FREE
 }
@@ -281,6 +332,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 
     frp_size wordcount = 0;
     frp_size texture_count = 0;
+    frp_size line_count = 0;
     /* font kerning */
     FT_Bool use_kerning = 0;
 
@@ -298,11 +350,15 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         frp_size node_count = 0;
         for(FRPNode * node = line->node;node;node = node->next){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
-            while(s.len > 0){
+            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8) * s.len);
+            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*s.len);
+            int buff_index = 0;
+
+            while(buff[buff_index]){
                 int skip;
-                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool + s.beg,&skip));
-                s.beg += skip;
-                s.len -= skip;
+                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(buff+buff_index,&skip));
+                while(skip-- && buff[buff_index])
+                    buff_index++;
 
                 int isnew;
                 frg_index_of_word(curr,&isnew);
@@ -310,6 +366,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                     texture_count++;
                     //add texture locale
                     FT_Load_Glyph(face,curr,FT_LOAD_DEFAULT);
+
                     FT_Bitmap * bitmap = &(face->glyph->bitmap);
                     //check return or not
                     if(texture_x + bitmap->width >= FRG_TEXTURE_MAX_WIDTH){
@@ -324,23 +381,23 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                 }
                 wordcount++;
             }
+
+            frpfree(buff);
             node_count++;
         }
 
         if(max_node_count < node_count)
             max_node_count = node_count;
+        line_count++;
     }
 
     //malloc
-    if(FRGWords)
-        frpfree(FRGWords);
+    frg_freelines();
     FRGWords = frpmalloc(sizeof(struct FRGWordInfo) * wordcount);
-    if(FRGWordTextureLocales)
-        frpfree(FRGWordTextureLocales);
     FRGWordTextureLocales = frpmalloc(sizeof(struct FRGWordTextureInfo) * texture_count);
-    if(FRGNodeProperties)
-        frpfree(FRGNodeProperties);
     FRGNodeProperties = frpmalloc(sizeof(struct FRGNodeProperty) * max_node_count);
+    FRGLines = frpmalloc(sizeof(struct FRGline) * line_count);
+    FRGLinesSize = line_count;
 
     frp_size mxsize = 1;
     while(mxsize < texture_next_tail)
@@ -350,30 +407,49 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         glGenTextures(1,&frg_texture);
     }
     glBindTexture(GL_TEXTURE_2D,frg_texture);
-    glTexStorage2D(GL_TEXTURE_2D,1,GL_RGBA8,FRG_TEXTURE_MAX_WIDTH,mxsize);
+    glTexStorage2D(GL_TEXTURE_2D,1,GL_R8,FRG_TEXTURE_MAX_WIDTH,mxsize);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 
     //TODO:init texture locale,word id(locale),property id
     //上面和下面的坐标计算必须一致
-    frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0;
+    frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0,line_count = 0;
     for(FRPLine * line = flycseg->flyc.lines;line;line = line->next){
+        /* start word property */
+        FRGLines[line_count].start_word = wordcount;
 
         /* change font for current line */
         frg_change_font_frp_str(lib,&face,frp_play_property_string_value(line->values,pid_font));
         //update use kerning here please
         FT_UInt lastword = 0;
         frp_size nodecount = 0;
+
+        /* malloc node args for the line */
+        for(FRPNode * n = line->node;n;n=n->next)
+            nodecount++;
+        FRGLines[line_count].node_args = frpmalloc(sizeof(struct FRGLineNodeArgs) * nodecount);
+        nodecount = 0;
+
         for(FRPNode * node = line->node;node;node = node->next){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
-            while(s.len > 0){
+            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8) * s.len);
+            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*s.len);
+            int buff_index = 0;
+            //recalculate offset used
+            int begin_word_index = wordcount;
+
+            int pen_h_x = 0,pen_v_y = 0;
+
+            while(buff[buff_index]){
+                int isFirstWord = buff_index == 0;
+
                 int skip;
-                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(file->textpool + s.beg,&skip));
-                s.beg += skip;
-                s.len -= skip;
+                FT_UInt curr = FT_Get_Char_Index(face,frg_utf8_to_unicode(buff+buff_index,&skip));
+                while(skip-- && buff[buff_index])
+                    buff_index++;
 
                 int isnew;
-                FRGWords[wordcount].word_id = frg_index_of_word(curr,&isnew);
+                int tex_id = FRGWords[wordcount].tex_id = frg_index_of_word(curr,&isnew);
                 FRGWords[wordcount].property_id = nodecount;
                 if(isnew){
                     //add texture locale
@@ -390,16 +466,62 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                     //now texture_x,texture_y is the locale of word[wordcount]'s texture
                     //load to texture
                     glTexSubImage2D(GL_TEXTURE_2D,0,texture_x,texture_y,bitmap->width,bitmap->rows,GL_RED,GL_UNSIGNED_BYTE,bitmap->buffer);
+                    struct FRGWordTextureInfo * texinfo = FRGWordTextureLocales + tex_id;
+                    texinfo->tex_x = texture_x;
+                    texinfo->tex_y = texture_y;
+                    texinfo->tex_width = bitmap->width;
+                    texinfo->tex_height = bitmap->rows;
+
                     texture_x += bitmap->width;
                 }
                 //calculate begin pos of word
                 //TODO:locale calculate of glyph
+
+                struct FRGLineNodeArgs * nodeargs = FRGLines[line_count].node_args + nodecount;
+                if(use_kerning && lastword && curr){
+                    FT_Vector delta;
+                    FT_Get_Kerning(face,lastword,curr,FT_KERNING_DEFAULT,&delta);
+                    if(isFirstWord){
+                        nodeargs->kerning_h_x_off = delta.x >> 6;
+                        /* no impl vertical kerning*/
+                        nodeargs->kerning_v_y_off = 0;
+                    }else{
+                        pen_h_x += delta.x >> 6;
+                        /* no impl vertical kerning */
+                        //pen_v_y -= 0;
+                    }
+                }else{
+                    if(isFirstWord)
+                        nodeargs->kerning_h_x_off = nodeargs->kerning_v_y_off = 0;
+                }
+                struct FRGWordInfo *word = FRGWords + wordcount;
+
+                /* horizental */
+                word->h_x_off = pen_h_x + face->glyph->bitmap_left;
+                word->h_y_off = face->glyph->bitmap_top;
+                pen_h_x += face->glyph->advance.x >> 6;
+                /* vertical */
+                FT_Load_Glyph(face,curr,FT_LOAD_VERTICAL_LAYOUT);
+                word->v_x_off = face->glyph->bitmap_left;
+                word->v_y_off = pen_v_y + face->glyph->bitmap_top; /*Does bitmap_top is positive for upwards y in vertical layout? */
+                pen_v_y -= face->glyph->advance.y >> 6; /* advance is width and height.*/
+
                 wordcount++;
                 lastword = curr;
             }
+            FRGLines[line_count].node_args[nodecount].h_width = pen_h_x;
+            FRGLines[line_count].node_args[nodecount].v_height = -pen_v_y;
+
+            frpfree(buff);
             nodecount++;
         }
+
+        /* word count property */
+        FRGLines[line_count].word_count = wordcount - FRGLines[line_count].start_word;
+        line_count++;
     }
+
+    frg_clear_index_of_word();
 
     /* load program */
     if(!frg_program_loaded){
@@ -457,11 +579,12 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 void frg_renderline(FRPLine * line,frp_time time){
 
 
+
     /* debug only,never do this please... */
     glBindVertexArray(varry);
     glDrawArrays(GL_TRIANGLE_FAN,0,4);
 
-
+    /*
     float tim = time / 10000.;
     tim -= 1;
     float yoff = -1;
@@ -473,7 +596,9 @@ void frg_renderline(FRPLine * line,frp_time time){
     glVertex2f(tim+0.5f,yoff + 0.2f);
     glVertex2f(tim+0.5f,yoff);
     glEnd();
+    */
 }
 void frg_unloadlyrc(){
     frg_freelines();
+    frg_clear_index_of_word();
 }

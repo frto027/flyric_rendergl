@@ -34,8 +34,9 @@ int main(int argc,char **argv){
     /* init openGL context */
     glfwInit();
 
-    glfwWindowHint(GLFW_VERSION_MAJOR,3);
-    glfwWindowHint(GLFW_VERSION_MINOR,3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
+
 
     GLFWwindow * window = glfwCreateWindow(wind_width,wind_height,"lyric",NULL,NULL);
     glfwSetWindowSizeCallback(window, window_size_callback);
@@ -74,7 +75,7 @@ int main(int argc,char **argv){
     int fps = 0;
     double lastfps = start_time;
     while(!glfwWindowShouldClose(window)){
-   
+
         /* render here*/
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -84,7 +85,7 @@ int main(int argc,char **argv){
         double tim = glfwGetTime() - start_time;
         frp_time ftim = (frp_time)(tim*1000);
 
-        
+
         //render line
         for(FRTNode * tnode = frp_play_getline_by_time(file,ftim);tnode;tnode = tnode->next){
 
@@ -98,7 +99,7 @@ int main(int argc,char **argv){
             fps = 0;
             lastfps = glfwGetTime();
         }
-        
+
         //wait for 1/60s
     }
 
