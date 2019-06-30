@@ -1,10 +1,6 @@
 #include "flyric_rendergl.h"
 #include "glenv.h"
 
-/* debug only*/
-    GLuint buffer,varry;
-
-
 frp_size frg_fontsize = 40;
 
 frp_size frg_scr_width = 800;
@@ -18,14 +14,21 @@ GLuint frg_texture = 0;
 frp_bool frg_program_loaded = 0;
 GLuint frg_program;
 
+frp_bool frg_buffer_initailized = 0;
+GLuint frg_buffer_tex_coords,frg_buffer_wordinfos,frg_buffer_props,frg_buffer_lineprop;//,frg_uniform_lineprops,frg_uniform_propinfo;
+GLuint frg_buffer_points,frg_vertex_arr;
+GLint frg_uniform_screenScale;
+
+GLint frg_point_ids [] = {0,1,2,3};
+
 const char * frg_shaders[] = {
 /*
 struct TexLocales is FRGWordTextureInfo in C language.
 struct PropInfo is FRGNodeProperty in c lang.
 
 point pos:
-3 2
 0 1
+3 2
 
 */
 /* vertex shader */
@@ -36,8 +39,8 @@ struct TexLocales{\
 };\
 struct PropInfo{\
     vec2 hxvy;\
-    vec4 color;\
     vec2 scale;\
+    vec4 color;\
 };\
 struct WordInfo{\
     vec2 hoff;\
@@ -45,26 +48,31 @@ struct WordInfo{\
     int texid;\
     int propid;\
 };\
-uniform TexLocales tex_coords[4096];\
-uniform PropInfo props[4096];\
-uniform WordInfo words[300];\
+layout (std140, binding = 1) uniform TexCoorBlock{ TexLocales tex_coords[3];};\
+layout (std140, binding = 2) uniform PropInfoBlock{ PropInfo props[100]; };\
+layout (std140, binding = 3) uniform WordInfoBlock{ WordInfo words[300]; };\
+layout (std140, binding = 4) uniform LineProps{\
+    vec2 vxhy;\
+    int start_wordid;\
+};\
 uniform vec2 screenScale;\
-uniform vec2 vxhy;\
 layout (location = 0) in int pos_mark;\
 out vec2 tex_coord;\
+out float rcc;\
 void main(void){\
-    int tid = words[gl_InstanceID].texid;\
-    int pid = words[gl_InstanceID].propid;\
-    vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[gl_InstanceID].hoff;\
-    \
+    rcc = 0.;\
+    int windex = start_wordid + gl_InstanceID;\
+    int tid = words[windex].texid;\
+    int pid = words[windex].propid;\
+    vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[windex].hoff * screenScale;\
     tex_coord = tex_coords[tid].texcoord;\
     if(pos_mark == 1 || pos_mark == 2){\
-        hpos.x = hpos.x + tex_coords[tid].texsize.x;\
-        tex_coord.x = tex_coord.x + tex_coords[tid].texsize.x;\
+        hpos.x += tex_coords[tid].texsize.x * screenScale.x;\
+        tex_coord.x += + tex_coords[tid].texsize.x;\
     }\
     if(pos_mark == 2 || pos_mark == 3){\
-        hpos.y = hpos.y + tex_coords[tid].texsize.y;\
-        tex_coord.y = tex_coord.y + tex_coords[tid].texsize.y;\
+        hpos.y += - tex_coords[tid].texsize.y * screenScale.y;\
+        tex_coord.y += + tex_coords[tid].texsize.y;\
     }\
     gl_Position = vec4(hpos,0,1);\
 }\
@@ -72,11 +80,14 @@ void main(void){\
 /* fragment shader */
 "#version 310 es\n\
 uniform sampler2D tex;\
+uniform highp vec2 texScale;\
 in highp vec2 tex_coord;\
+in highp float rcc;\
 out highp vec4 color;\
 void main(void){\
 \
-    color = texture(tex,tex_coord).rrrr;\
+    color = texture(tex,tex_coord * texScale).rrrr;\
+""    color += vec4(rcc,0.5,0.1,0.4);""\
 }\
 "
 };
@@ -84,24 +95,29 @@ void main(void){\
 FRPFile * frg_frpfile = NULL;
 //=================info of uniform in shader=================
 struct FRGWordTextureInfo{
-    float tex_x,tex_y;
-    float tex_width,tex_height;
+    GLfloat tex_x,tex_y;
+    GLfloat tex_width,tex_height;
 }*FRGWordTextureLocales = NULL;//for each word(texture)
 struct FRGWordInfo{
-    float h_x_off,h_y_off;//文字水平布局时候左下距离property_id对应的Node的偏移
-    float v_x_off,v_y_off;//文字垂直布局时候左下距离propryty_id对应的Node的偏移
+    GLfloat h_x_off,h_y_off;//文字水平布局时候左下距离property_id对应的Node的偏移
+    GLfloat v_x_off,v_y_off;//文字垂直布局时候左下距离propryty_id对应的Node的偏移
     //float half_w,half_h;//文字半宽半高 你为什么不问问word_id对应的FRGWordTextureInfo呢？
-    int property_id;
-    int tex_id;
+    GLint tex_id;
+    GLint property_id;
+    GLint PADDING[2];
 }*FRGWords = NULL;//for each word
 struct FRGNodeProperty{//fill it in runtime
-    float h_x/*,h_y*/;//y is the baseline locale(uniform) TODO
-    float /*v_x,*/v_y;//x is the baseline locale(uniform) TODO
-    float colorR,colorG,colorB,colorA;
-    float scaleX,scaleY;
+    GLfloat h_x/*,h_y*/;//y is the baseline locale(uniform) TODO
+    GLfloat /*v_x,*/v_y;//x is the baseline locale(uniform) TODO
+    GLfloat scaleX,scaleY;
+    GLfloat colorR,colorG,colorB,colorA;
     //others
 }*FRGNodeProperties = NULL;//for each node
 
+struct{
+    GLfloat vx,hy;
+    GLint start_word;
+}FRGLineProperty;
 
 int frg_max_word_count = 0;
 
@@ -301,6 +317,9 @@ void frg_fontsize_set(frp_size fontsize){
 void frg_screensize_set(frp_size width,frp_size height){
     frg_scr_width = width;
     frg_scr_height = height;
+    if(frg_buffer_initailized){
+        glUniform2f(frg_uniform_screenScale,2./frg_scr_width,2./frg_scr_height);
+    }
 }
 int frg_loadlyric(FT_Library lib,FRPFile * file){
     if(!file)
@@ -404,6 +423,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         mxsize <<=1;
 
     if(!frg_has_texture){
+        frg_has_texture = 1;
         glGenTextures(1,&frg_texture);
     }
     glBindTexture(GL_TEXTURE_2D,frg_texture);
@@ -466,6 +486,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                     //now texture_x,texture_y is the locale of word[wordcount]'s texture
                     //load to texture
                     glTexSubImage2D(GL_TEXTURE_2D,0,texture_x,texture_y,bitmap->width,bitmap->rows,GL_RED,GL_UNSIGNED_BYTE,bitmap->buffer);
+
                     struct FRGWordTextureInfo * texinfo = FRGWordTextureLocales + tex_id;
                     texinfo->tex_x = texture_x;
                     texinfo->tex_y = texture_y;
@@ -473,6 +494,9 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                     texinfo->tex_height = bitmap->rows;
 
                     texture_x += bitmap->width;
+                }else{
+                    //do not setup texture
+                    FT_Load_Glyph(face,curr,FT_LOAD_DEFAULT);
                 }
                 //calculate begin pos of word
                 //TODO:locale calculate of glyph
@@ -538,6 +562,7 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
             printf("VertexShader compile message:\n%s\n",buff);
         }
         glAttachShader(frg_program,vshader);
+
         /* fragment shader*/
         GLuint fshader = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fshader,1,frg_shaders + 1,NULL);
@@ -553,21 +578,77 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         glLinkProgram(frg_program);
         glDeleteShader(vshader);
         glDeleteShader(fshader);
+
         {
         char buff[1024];
         GLint para;
         glGetProgramiv(frg_program,GL_LINK_STATUS,&para);
         glGetProgramInfoLog(frg_program,1024,NULL,buff);
-        if(para != GL_FALSE)
+        if(para == GL_FALSE)
             printf("Link shader program error message:\n%s\n",buff);
         }
         glUseProgram(frg_program);
     }
 
+    /* buffers */
+    if(!frg_buffer_initailized){
+        frg_buffer_initailized = 1;
+        glGenBuffers(1,&frg_buffer_props);
+        glGenBuffers(1,&frg_buffer_tex_coords);
+        glGenBuffers(1,&frg_buffer_wordinfos);
+        glGenBuffers(1,&frg_buffer_lineprop);
+
+        glGenBuffers(1,&frg_buffer_points);
+    }
+
+    /* buffer datas */
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_tex_coords);
+    glBufferData(GL_UNIFORM_BUFFER,sizeof(struct FRGWordTextureInfo) * texture_count,FRGWordTextureLocales,GL_STATIC_DRAW);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_props);
+    glBufferData(GL_UNIFORM_BUFFER,sizeof(struct FRGNodeProperty) * max_node_count,NULL,GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_wordinfos);
+    glBufferData(GL_UNIFORM_BUFFER,sizeof(struct FRGWordInfo) * wordcount,FRGWords,GL_STATIC_DRAW);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_lineprop);
+    glBufferData(GL_UNIFORM_BUFFER,sizeof(FRGLineProperty),&FRGLineProperty,GL_DYNAMIC_DRAW);
+
+
+    glGenVertexArrays(1,&frg_vertex_arr);
+    glBindVertexArray(frg_vertex_arr);
+    glBindBuffer(GL_ARRAY_BUFFER,frg_buffer_points);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(frg_point_ids),frg_point_ids,GL_STATIC_DRAW);
+
+    glVertexAttribIPointer(0,1,GL_INT,0,0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,0);
+
+    /* bind with uniform */
+
+    glBindBufferBase(GL_UNIFORM_BUFFER,1,frg_buffer_tex_coords);
+    glBindBufferBase(GL_UNIFORM_BUFFER,2,frg_buffer_props);
+    glBindBufferBase(GL_UNIFORM_BUFFER,3,frg_buffer_wordinfos);
+    glBindBufferBase(GL_UNIFORM_BUFFER,4,frg_buffer_lineprop);
+    //glUniformBlockBinding(frg_program,glGetUniformBlockIndex(frg_program,"TexCoorBlock"),frg_buffer_tex_coords);
+    //glUniformBlockBinding(frg_program,glGetUniformBlockIndex(frg_program,"PropInfoBlock"),frg_buffer_props);
+    //glUniformBlockBinding(frg_program,glGetUniformBlockIndex(frg_program,"WordInfoBlock"),frg_buffer_wordinfos);
+    //glUniformBlockBinding(frg_program,glGetUniformBlockIndex(frg_program,"LineProps"),frg_buffer_lineprop);
+
+    /* texture Scales */
+    glUniform2f(glGetUniformLocation(frg_program,"texScale"),1./FRG_TEXTURE_MAX_WIDTH,1./mxsize);
+
+    /* uniforms filled when rendering */
+    //frg_uniform_lineprop = glGetUniformBlockIndex(frg_program,"LineProps");
+    frg_uniform_screenScale = glGetUniformLocation(frg_program,"screenScale");
+    glUniform2f(frg_uniform_screenScale,2./frg_scr_width,2./frg_scr_height);
+    //frg_uniform_lineprops = glGetUniformBlockIndex(frg_program,"LineProps");
+    //frg_uniform_propinfo = glGetUniformBlockIndex(frg_program,"PropInfoBlock");
+    //frg_buffer_props
+
     /* debug */
-    GLfloat pts[] = {
-    0,0,1,0,1,1,0,1
-    };
+    /*
     glGenBuffers(1,&buffer);
     glGenVertexArrays(1,&varry);
     glBindVertexArray(varry);
@@ -575,14 +656,46 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     glBufferData(GL_ARRAY_BUFFER,sizeof(pts),pts,GL_STATIC_DRAW);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
     glEnableVertexAttribArray(0);
+    */
 }
 void frg_renderline(FRPLine * line,frp_time time){
+    int i = 0;
+    int linenum = line->linenumber;
+    FRGLineProperty.start_word = FRGLines[linenum].start_word;
+    printf("%d\n",FRGLineProperty.start_word);
+    FRGLineProperty.hy = 0;
+    FRGLineProperty.vx = 0;
 
+    int pen_hx = 0;
+    int pen_vy = 0;
 
+    struct FRGNodeProperty * prop = FRGNodeProperties;
+    for(FRPNode * n = line->node;n;n = n->next,prop++,i++){
+        pen_hx += FRGLines[linenum].node_args[i].kerning_h_x_off;
+        pen_vy += FRGLines[linenum].node_args[i].kerning_v_y_off;
 
-    /* debug only,never do this please... */
-    glBindVertexArray(varry);
-    glDrawArrays(GL_TRIANGLE_FAN,0,4);
+        prop->h_x = pen_hx * 2. / frg_scr_width;
+        prop->v_y = pen_vy * 2. / frg_scr_height;
+
+        pen_hx += FRGLines[linenum].node_args[i].h_width;
+        pen_vy += FRGLines[linenum].node_args[i].v_height;
+
+    }
+
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_props);
+    glBufferSubData(GL_UNIFORM_BUFFER,0,sizeof(struct FRGNodeProperty) * i,FRGNodeProperties);
+    //glUniformBlockBinding(frg_program,frg_uniform_propinfo,frg_buffer_props);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_lineprop);
+    glBufferSubData(GL_UNIFORM_BUFFER,0,sizeof(FRGLineProperty),&FRGLineProperty);
+    //glUniformBlockBinding(frg_program,frg_uniform_lineprops,frg_buffer_lineprop);
+
+    glBindBuffer(GL_UNIFORM_BUFFER,0);
+
+    glBindVertexArray(frg_vertex_arr);
+    //glDrawArraysInstanced(GL_TRIANGLE_FAN,0,4,FRGLines[line->linenumber].word_count);
+
+    glDrawArraysInstanced(GL_TRIANGLE_FAN,0,4,FRGLines[linenum].word_count);
 
     /*
     float tim = time / 10000.;
@@ -601,4 +714,8 @@ void frg_renderline(FRPLine * line,frp_time time){
 void frg_unloadlyrc(){
     frg_freelines();
     frg_clear_index_of_word();
+    frg_buffer_initailized = 0;
+    glDeleteBuffers(1,&frg_buffer_props);
+    glDeleteBuffers(1,&frg_buffer_tex_coords);
+    glDeleteBuffers(1,&frg_buffer_wordinfos);
 }
