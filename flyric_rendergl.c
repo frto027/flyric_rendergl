@@ -21,7 +21,8 @@ GLint frg_uniform_screenScale;
 
 GLint frg_point_ids [] = {0,1,2,3};
 
-frp_size frg_ids_colorR,frg_ids_colorG,frg_ids_colorB,frg_ids_colorA;
+frp_size frg_ids_colorR,frg_ids_colorG,frg_ids_colorB,frg_ids_colorA,
+    frg_ids_anchor_x,frg_ids_anchor_y,frg_ids_self_anchor_x,frg_ids_self_anchor_y;
 
 const char * frg_shaders[] = {
 /*
@@ -317,6 +318,11 @@ void frg_startup(const char * default_font_path){
     frp_anim_add_support("ColorG");
     frp_anim_add_support("ColorB");
     //frp_anim_add_support("ColorA");
+
+    frp_anim_add_support("AnchorX");
+    frp_anim_add_support("AnchorY");
+    frp_anim_add_support("SelfAnchorX");
+    frp_anim_add_support("SelfAnchorY");
     //declare that i support animation
 }
 void frg_shutdown(){
@@ -363,6 +369,10 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frg_ids_colorG = frp_play_get_property_id(file,"ColorG");
     frg_ids_colorB = frp_play_get_property_id(file,"ColorB");
     frg_ids_colorA = frp_play_get_property_id(file,"ColorA");
+    frg_ids_anchor_x = frp_play_get_property_id(file,"AnchorX");
+    frg_ids_anchor_y = frp_play_get_property_id(file,"AnchorY");
+    frg_ids_self_anchor_x = frp_play_get_property_id(file,"SelfAnchorX");
+    frg_ids_self_anchor_y = frp_play_get_property_id(file,"SelfAnchorY");
 
 
     frp_size pid_text = frp_play_get_property_id(frg_frpfile,"Text");
@@ -698,10 +708,10 @@ void frg_renderline(FRPLine * line,frp_time time){
     float pen_hx = 0;
     float pen_vy = 0;
 
-    float anchor_x = 0.5f;
-    float anchor_y = 0.5f;
-    float self_anchor_x = 0.5f;
-    float self_anchor_y = 0.5f;
+    float anchor_x = frp_play_property_float_value(time,line->values,frg_ids_anchor_x);
+    float anchor_y = frp_play_property_float_value(time,line->values,frg_ids_anchor_y);
+    float self_anchor_x = frp_play_property_float_value(time,line->values,frg_ids_self_anchor_x);
+    float self_anchor_y = frp_play_property_float_value(time,line->values,frg_ids_self_anchor_y);
     /* calculate start position for anchor */
 
     /* horizental */
@@ -726,7 +736,6 @@ void frg_renderline(FRPLine * line,frp_time time){
 
         /* colors */
         prop->colorR = frp_play_property_float_value(time,n->values,frg_ids_colorR);
-        printf("ColorR -> %f\n",frp_play_property_float_value(time,n->values,frg_ids_colorR));
         prop->colorG = frp_play_property_float_value(time,n->values,frg_ids_colorG);
         prop->colorB = frp_play_property_float_value(time,n->values,frg_ids_colorB);
         /* if alpha = 1,the word is hide.(for the default value = 0)*/

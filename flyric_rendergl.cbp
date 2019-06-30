@@ -12,7 +12,7 @@
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="~/Project/testFreeType/Deng.ttf lrc.txt" />
+				<Option parameters="/home/frto027/Downloads/midnightsnack-bb/MIDNSBRG.TTF lrc.txt" />
 				<Option projectCompilerOptionsRelation="2" />
 				<Compiler>
 					<Add option="-g" />

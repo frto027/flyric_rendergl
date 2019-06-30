@@ -30,6 +30,8 @@ int main(int argc,char **argv){
 
     /*you MUST init flyric parser before frg_startup*/
     frpstartup();
+    /* init flyric rendergl */
+    frg_startup(argv[1]);
 
     /* init openGL context */
     glfwInit();
@@ -64,8 +66,7 @@ int main(int argc,char **argv){
         }
     }
 
-    /* init flyric rendergl */
-    frg_startup(argv[1]);
+
     frg_screensize_set(800,600);
     frg_fontsize_set(60);
 
