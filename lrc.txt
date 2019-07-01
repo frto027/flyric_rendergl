@@ -3,12 +3,12 @@ Shake(x):(sin(10*x) + 1)/2
 
 
 [anim]
-Name,Property,Func,During,Offset
-Shake,ColorR,Shake(x),[Duration]/2,[Duration]/4
+Name,Property,Func,During,Offset,Hard
+Shake,ColorR,Shake(x),[Duration]/2,[Duration]
 Shake,ColorG,Shake(x+10)
 Shake,ColorG,Shake(x+20)
 FadeOut,ColorA,x,[Duration]/5,[Duration]*4/5
-FlyX,AnchorX,x,[Duration],0
+FlyX,AnchorX,x,[Duration],[Duration]/2,T
 FlyX,SelfAnchorX,
 FlyY,AnchorY,
 FlyY,SelfAnchorY,
