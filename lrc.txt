@@ -17,13 +17,21 @@ Cook,HV,sin( t/[Duration] * 3.1415926 * 2)/2 + 0.5,100000,0,F
 [flyc]
 Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV
 line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
+<<<<<<< HEAD
 line,1000,between,,,,,,,,,,,,
+=======
+line,1000,between,,,,,,,,,,,,0,0,0,0
+>>>>>>> master
 word,>300,,comment\,test
 ,,,ok ,
 line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1
 word,>1000,,A Sample , ,0,1,0
 ,,,Lyric,,1,0,0
+<<<<<<< HEAD
 line,3000,7000,,Cook,,,,,,,,,,0.5,0.5,0.5,0.5
+=======
+line,3000,7000,, ,,,,,,,,,,0.5,0.5,0.5,0.5
+>>>>>>> master
 word,,,This is a lyric,,,
 
 line,>7000,2000
