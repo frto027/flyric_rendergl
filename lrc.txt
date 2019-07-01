@@ -7,17 +7,18 @@ Name,Property,Func,During,Offset
 Shake,ColorR,Shake(x),[Duration]/2,[Duration]/4
 Shake,ColorG,Shake(x+10)
 Shake,ColorG,Shake(x+20)
+FadeOut,ColorA,x,[Duration]/5,[Duration]*4/5
 FlyX,AnchorX,x,[Duration],0
 FlyX,SelfAnchorX,
 FlyY,AnchorY,
 FlyY,SelfAnchorY,
 
 [flyc]
-Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY
+Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA
 line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
 line,1000,between,,,,,,,,,,,,0,0,0,0
 word,>300,,abcd,Shake,0,0,0
-,,,ef, ,0,1,0
+,,,ef,FadeOut,0,1,0
 line,4000,4000,,FlyX,,,,,,,,,,1,1,1,1
 word,>1000,,A Sample ,,0,1,0
 ,,,Lyric ,,1,0,0

@@ -1,22 +1,18 @@
-LIBS += -L./libs
+BIN_DIR=./bin
+LIBS_DIR=./libs
 
-INCLUDE_PATH += -I"./flyric_parser"
-LIBS += -lfrparser
+main_linux.out:$(LIBS_DIR)/libfparser.a
+	[ -d $(BIN_DIR) ]||mkdir $(BIN_DIR)
+	cd src&&make $@
+main_linux_debug.out:$(LIBS_DIR)/libfparser.a
+	[ -d $(BIN_DIR) ]||mkdir $(BIN_DIR)
+	cd src&&make $@
+$(LIBS_DIR)/libfparser.a:
+	[ -d $(LIBS_DIR) ]||mkdir $(LIBS_DIR)
+	./gen_library.sh
 
-INCLUDE_PATH += -I"/usr/local/include/freetype2"
-LIBS += -lfreetype
+cleanall:clean
+	rm -rf ./libs/*
 
-
-LIBS += -lGL -lglfw
-LIBS += -lm
-
-main_linux.out:main_linux.o flyric_rendergl.o
-	cc -o $@ $+ $(LIBS)
-main_linux_debug.out:main_linux.c glenv.h flyric_rendergl.h flyric_rendergl.c
-	cc -o $@ main_linux.c flyric_rendergl.c $(LIBS) $(INCLUDE_PATH) -g
-main_linux.o:main_linux.c glenv.h flyric_rendergl.h
-	cc -c $(INCLUDE_PATH) main_linux.c
-flyric_rendergl.o:flyric_rendergl.c glenv.h flyric_rendergl.h
-	cc -c $(INCLUDE_PATH) flyric_rendergl.c
 clean:
-	rm -rf libs build *.o main_linux.out
+	rm -rf ./bin/*

@@ -317,7 +317,7 @@ void frg_startup(const char * default_font_path){
     frp_anim_add_support("ColorR");
     frp_anim_add_support("ColorG");
     frp_anim_add_support("ColorB");
-    //frp_anim_add_support("ColorA");
+    frp_anim_add_support("ColorA");
 
     frp_anim_add_support("AnchorX");
     frp_anim_add_support("AnchorY");

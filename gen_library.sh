@@ -1,10 +1,10 @@
 #!/bin/sh
-echo 'building libfrparser.a ...'
+echo 'building libfparser.a ...'
 if [ ! -d libs ]; then
     mkdir ./libs
 fi
 cd ./flyric_parser
 make clean
 make
-mv *.a ../libs
+mv ./obj/*.a ../libs
 cd ..
