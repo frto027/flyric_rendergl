@@ -8,8 +8,8 @@ Shake,ColorR,Shake(x),[Duration]/2,[Duration]
 Shake,ColorG,Shake(x+10)
 Shake,ColorG,Shake(x+20)
 FadeOut,ColorA,x,[Duration]/5,[Duration]*4/5
-FlyX,AnchorX,x,[Duration],[Duration]/2,T
-FlyX,SelfAnchorX,
+FlyX,AnchorX,x,[Duration],[Duration]/2,F
+FlyX,SelfAnchorX,,,,F
 FlyY,AnchorY,
 FlyY,SelfAnchorY,
 
@@ -17,13 +17,15 @@ FlyY,SelfAnchorY,
 Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA
 line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
 line,1000,between,,,,,,,,,,,,0,0,0,0
-word,>300,,abcd,Shake,0,0,0
-,,,ef,FadeOut,0,1,0
-line,4000,4000,,FlyX,,,,,,,,,,1,1,1,1
-word,>1000,,A Sample ,,0,1,0
-,,,Lyric ,,1,0,0
-,,,Here !\,ok bye~,,0,0,1
+word,>300,,comment\,test
+,,,ok ,
+line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1
+word,>1000,,A Sample , ,0,1,0
+,,,Lyric,,1,0,0
 line,3000,7000,, ,,,,,,,,,,0.5,0.5,0.5,0.5
-word,,,This is a lyric,
+word,,,This is a lyric,,,
+
+line,>7000,2000
+word,,,The end,
 #[ly]
 #test segm
