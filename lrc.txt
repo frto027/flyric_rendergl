@@ -12,17 +12,18 @@ FlyX,AnchorX,x,[Duration],[Duration]/2,F
 FlyX,SelfAnchorX,,,,F
 FlyY,AnchorY,
 FlyY,SelfAnchorY,
+Cook,HV,sin( t/[Duration] * 3.1415926 * 2)/2 + 0.5,100000,0,F
 
 [flyc]
-Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA
+Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV
 line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
-line,1000,between,,,,,,,,,,,,0,0,0,0
+line,1000,between,,,,,,,,,,,,
 word,>300,,comment\,test
 ,,,ok ,
 line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1
 word,>1000,,A Sample , ,0,1,0
 ,,,Lyric,,1,0,0
-line,3000,7000,, ,,,,,,,,,,0.5,0.5,0.5,0.5
+line,3000,7000,,Cook,,,,,,,,,,0.5,0.5,0.5,0.5
 word,,,This is a lyric,,,
 
 line,>7000,2000

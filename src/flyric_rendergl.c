@@ -1,5 +1,7 @@
 #include "flyric_rendergl.h"
 #include "glenv.h"
+//cos and sin
+#include <math.h>
 
 frp_size frg_fontsize = 40;
 
@@ -22,7 +24,9 @@ GLint frg_uniform_screenScale;
 GLint frg_point_ids [] = {0,1,2,3};
 
 frp_size frg_ids_colorR,frg_ids_colorG,frg_ids_colorB,frg_ids_colorA,
-    frg_ids_anchor_x,frg_ids_anchor_y,frg_ids_self_anchor_x,frg_ids_self_anchor_y;
+    frg_ids_anchor_x,frg_ids_anchor_y,frg_ids_self_anchor_x,frg_ids_self_anchor_y,
+    frg_ids_transX,frg_ids_transY,frg_ids_rotX,frg_ids_rotY,frg_ids_rotZ,
+    frg_ids_HV;
 
 const char * frg_shaders[] = {
 /*
@@ -44,6 +48,7 @@ struct PropInfo{\
     vec2 hxvy;\
     vec2 scale;\
     vec4 color;\
+    mat4 trans;\
 };\
 struct WordInfo{\
     vec2 hoff;\
@@ -56,6 +61,7 @@ layout (std140, binding = 2) uniform PropInfoBlock{ PropInfo props[100]; };\
 layout (std140, binding = 3) uniform WordInfoBlock{ WordInfo words[300]; };\
 layout (std140, binding = 4) uniform LineProps{\
     vec2 vxhy;\
+    float hv;\
     int start_wordid;\
 };\
 uniform vec2 screenScale;\
@@ -70,18 +76,17 @@ void main(void){\
     int pid = words[windex].propid;\
     vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[windex].hoff * screenScale;\
     vec2 vpos = vec2(vxhy.x,props[pid].hxvy.y) + words[windex].voff * screenScale;\
+    vec2 pos = hv * vpos + (1.-hv) * hpos;\
     tex_coord = tex_coords[tid].texcoord;\
     if(pos_mark == 1 || pos_mark == 2){\
-        hpos.x += tex_coords[tid].texsize.x * screenScale.x;\
-        vpos.x += tex_coords[tid].texsize.x * screenScale.x;\
+        pos.x += tex_coords[tid].texsize.x * screenScale.x;\
         tex_coord.x += + tex_coords[tid].texsize.x;\
     }\
     if(pos_mark == 2 || pos_mark == 3){\
-        hpos.y += - tex_coords[tid].texsize.y * screenScale.y;\
-        vpos.y += - tex_coords[tid].texsize.y * screenScale.y;\
+        pos.y += - tex_coords[tid].texsize.y * screenScale.y;\
         tex_coord.y += + tex_coords[tid].texsize.y;\
     }\
-    gl_Position = vec4(hpos,0,1);\
+    gl_Position = vec4(pos,0,1);\
     word_color = props[pid].color;\
 }\
 ",
@@ -120,12 +125,15 @@ struct FRGNodeProperty{//fill it in runtime
     GLfloat /*v_x,*/v_y;//x is the baseline locale(uniform) TODO
     GLfloat scaleX,scaleY;
     GLfloat colorR,colorG,colorB,colorA;
+    GLfloat trans[4][4];
     //others
 }*FRGNodeProperties = NULL;//for each node
 
 struct{
     GLfloat vx,hy;
+    GLfloat hv;
     GLint start_word;
+
 }FRGLineProperty;
 
 int frg_max_word_count = 0;
@@ -162,6 +170,73 @@ void frg_freelines(){
         FRGLines = NULL;
     }
 #undef FREE
+}
+//=====================matrix functions=============
+void frg_mat_e(float mat[4][4]){
+    for(int i=0;i<4;i++)
+        for(int j=0;j<4;j++)
+            mat[i][j] = i==j;
+}
+//a x b -> b
+void frg_mat_mul(float a[4][4],float b[4][4]){
+    float c[4][4];
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            c[i][j]=0;
+            for(int k=0;k<4;k++){
+                c[i][j] += a[i][k]*b[k][j];
+            }
+        }
+    }
+    for(int i=0;i<4;i++)
+        for(int j=0;j<4;j++)
+            b[i][j]=c[i][j];
+}
+/*
+1 0 0 x
+0 1 0 y
+0 0 1 z
+0 0 0 1
+*/
+void frg_mat_move(float x,float y,float z,float mat[4][4]){
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            mat[i][j] = i == j;
+        }
+    }
+    mat[0][3]=x;
+    mat[1][3]=y;
+    mat[2][3]=z;
+}
+void frg_rot_x(float x,float mat[4][4]){
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            mat[i][j] = i == j;
+        }
+    }
+    mat[1][1] = mat[2][2] = cosf(x);
+    mat[2][1] = sinf(x);
+    mat[1][2] = -mat[2][1];
+}
+void frg_rot_y(float x,float mat[4][4]){
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            mat[i][j] = i == j;
+        }
+    }
+    mat[0][0] = mat[2][2] = cosf(x);
+    mat[0][2] = sinf(x);
+    mat[2][0] = -mat[0][2];
+}
+void frg_rot_z(float x,float mat[4][4]){
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            mat[i][j] = i == j;
+        }
+    }
+    mat[0][0] = mat[1][1] = cosf(x);
+    mat[1][0] = sinf(x);
+    mat[0][1] = -mat[1][0];
 }
 //===================utf8 to unicode============
 FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
@@ -229,6 +304,7 @@ FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
        *skip = 1;
     return 0;
 }
+
 /* font id current line used when load lyric */
 int frg_current_font_id = 0;
 
@@ -323,6 +399,14 @@ void frg_startup(const char * default_font_path){
     frp_anim_add_support("AnchorY");
     frp_anim_add_support("SelfAnchorX");
     frp_anim_add_support("SelfAnchorY");
+
+    frp_anim_add_support("Rotate");
+    frp_anim_add_support("TransX");
+    frp_anim_add_support("TransY");
+
+    frp_flyc_add_parse_rule("HV",FRP_FLYC_PTYPE_NUM);
+    frp_anim_add_support("HV");
+
     //declare that i support animation
 }
 void frg_shutdown(){
@@ -374,6 +458,12 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frg_ids_self_anchor_x = frp_play_get_property_id(file,"SelfAnchorX");
     frg_ids_self_anchor_y = frp_play_get_property_id(file,"SelfAnchorY");
 
+    frg_ids_transX = frp_play_get_property_id(file,"TransX");
+    frg_ids_transY = frp_play_get_property_id(file,"TransY");
+    //frg_ids_rotX = frp_play_get_property_id(file,"RotateX");
+    //frg_ids_rotY = frp_play_get_property_id(file,"RotateY");
+    frg_ids_rotZ = frp_play_get_property_id(file,"Rotate");
+    frg_ids_HV = frp_play_get_property_id(file,"HV");
 
     frp_size pid_text = frp_play_get_property_id(frg_frpfile,"Text");
     frp_size pid_font = frp_play_get_property_id(frg_frpfile,"Font");
@@ -705,6 +795,8 @@ void frg_renderline(FRPLine * line,frp_time time){
     FRGLineProperty.hy = 0;
     FRGLineProperty.vx = 0;
 
+    FRGLineProperty.hv = frp_play_property_float_value(time,line->values,frg_ids_HV);
+
     float pen_hx = 0;
     float pen_vy = 0;
 
@@ -715,13 +807,27 @@ void frg_renderline(FRPLine * line,frp_time time){
     /* calculate start position for anchor */
 
     /* horizental */
-
     pen_hx = ( anchor_x - 0.5f ) * frg_scr_width - self_anchor_x * FRGLines[linenum].h_width;
     FRGLineProperty.hy = (2 * anchor_y - 1 ) - self_anchor_y * (frg_fontsize) * 2. / frg_scr_height;
     /* vertical */
     FRGLineProperty.vx = (2 * anchor_x - 1) - self_anchor_x * frg_fontsize * 2. / frg_scr_height;
     pen_vy = (anchor_y - 0.5f) * frg_scr_height + (1 - self_anchor_y) * FRGLines[linenum].v_height;
     //pen_vy = frg_scr_height / 2;
+
+    float line_transform[4][4];
+    float temp_mat[4][4];
+    frg_mat_e(line_transform);
+
+    //move
+    frg_mat_move(
+        frp_play_property_float_value(time,line->values,frg_ids_transX),
+        frp_play_property_float_value(time,line->values,frg_ids_transY),
+        0,
+        temp_mat
+    );
+    frg_mat_mul(temp_mat,line_transform);
+
+
     struct FRGNodeProperty * prop = FRGNodeProperties;
     for(FRPNode * n = line->node;n;n = n->next,prop++,i++){
         /* update node property */
