@@ -38,12 +38,19 @@ int main(int argc,char **argv){
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
-
+#ifdef GLFW_TRANSPARENT_FRAMEBUFFER
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER,GLFW_TRUE);
+#endif
 
     GLFWwindow * window = glfwCreateWindow(wind_width,wind_height,"lyric",NULL,NULL);
     glfwSetWindowSizeCallback(window, window_size_callback);
 
     glfwMakeContextCurrent(window);
+	
+#ifdef __GLEW_H__
+	glewInit();
+#endif
+	
     /* 背景透明 */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
