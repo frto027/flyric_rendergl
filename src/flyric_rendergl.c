@@ -401,8 +401,8 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         frp_size node_count = 0;
         for(FRPNode * node = line->node;node;node = node->next){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
-            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8) * s.len);
-            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*s.len);
+            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8)*(s.len + 5));
+            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*(s.len + 5));
             int buff_index = 0;
 
             while(buff[buff_index]){
@@ -485,8 +485,8 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         int line_pen_hx = 0,line_pen_vy = 0;
         for(FRPNode * node = line->node;node;node = node->next){
             frp_str s = frp_play_property_string_value(node->values,pid_text);
-            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8) * s.len);
-            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*s.len);
+            frp_uint8 * buff = frpmalloc(sizeof(frp_uint8)*(s.len + 5));
+            frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*(s.len + 5));
             int buff_index = 0;
             //recalculate offset used
             int begin_word_index = wordcount;
