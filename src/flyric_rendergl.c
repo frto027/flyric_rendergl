@@ -76,7 +76,9 @@ void main(void){\
     int pid = words[windex].propid;\
     vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[windex].hoff * screenScale;\
     vec2 vpos = vec2(vxhy.x,props[pid].hxvy.y) + words[windex].voff * screenScale;\
-    vec2 pos = hv * vpos + (1.-hv) * hpos;\
+    vec2 pos = vec2(\
+    (hpos.x - vpos.x) * cos(hv*3.1415926/2.) + vpos.x,\
+    (vpos.y - hpos.y) * sin(hv*3.1415926/2.) + hpos.y);\
     tex_coord = tex_coords[tid].texcoord;\
     if(pos_mark == 1 || pos_mark == 2){\
         pos.x += tex_coords[tid].texsize.x * screenScale.x;\

@@ -76,15 +76,17 @@
 			<Add option="-Wall" />
 		</Compiler>
 		<Unit filename="Makefile" />
+		<Unit filename="flyric_parser/include/fparser_platform.h" />
+		<Unit filename="flyric_parser/include/fparser_public.h" />
 		<Unit filename="lrc.txt" />
 		<Unit filename="src/flyric_rendergl.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/flyric_rendergl.h" />
-		<Unit filename="src/glenv.h" />
 		<Unit filename="src/main_linux.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/platform/glenv.h" />
 		<Extensions>
 			<code_completion />
 			<debugger />
