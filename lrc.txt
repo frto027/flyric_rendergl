@@ -14,16 +14,19 @@ FlyY,AnchorY,
 FlyY,SelfAnchorY,
 Cook,HV,(sin( t/1000 * 3.1415926)/2 + 0.5)*4,100000,0,F
 Cook,AnchorX,(sin(t / 1500 * 3.1415926)/2 + 0.5),10000,0,F
-
+WWWW,TransX,sin(x * 1000) * 0.2,[Duration]/2,0,F
+WWWW,TransY,sin(x * 600) * 0.2,[Duration]/2
+RRRR,RotateZ,x * 3.1415926,[Duration],0,F
+,RotateX
 [flyc]
-Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,Rotate,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV
+Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,RotateZ,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV,RotateX,RotateY
 line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
-line,1000,between,,,,,,,,,,,,
-word,>300,,comment\,test
-,,,ok ,
+line,1000,between,,RRRR,,,,,,,,,,
+word,>300,,comment\,test,WWWW,
+,,,ok , ,
 line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1
-word,>1000,,A Sample , ,0,1,0
-,,,Lyric,,1,0,0
+word,>1000,1000,A Sample ,WWWW,0,1,0
+,,,Lyric, ,1,0,0
 line,3000,7000,,Cook,,,,,,,,,,0.5,0.5,0.5,0.5
 word,,,This is a lyric,,,
 

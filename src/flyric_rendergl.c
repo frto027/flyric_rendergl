@@ -88,7 +88,7 @@ void main(void){\
         pos.y += - tex_coords[tid].texsize.y * screenScale.y;\
         tex_coord.y += + tex_coords[tid].texsize.y;\
     }\
-    gl_Position = vec4(pos,0,1);\
+    gl_Position = props[pid].trans * vec4(pos,0,1);\
     word_color = props[pid].color;\
 }\
 ",
@@ -184,9 +184,9 @@ void frg_mat_mul(float a[4][4],float b[4][4]){
     float c[4][4];
     for(int i=0;i<4;i++){
         for(int j=0;j<4;j++){
-            c[i][j]=0;
+            c[j][i]=0;
             for(int k=0;k<4;k++){
-                c[i][j] += a[i][k]*b[k][j];
+                c[j][i] += a[k][i]*b[j][k];
             }
         }
     }
@@ -206,9 +206,9 @@ void frg_mat_move(float x,float y,float z,float mat[4][4]){
             mat[i][j] = i == j;
         }
     }
-    mat[0][3]=x;
-    mat[1][3]=y;
-    mat[2][3]=z;
+    mat[3][0]=x;
+    mat[3][1]=y;
+    mat[3][2]=z;
 }
 void frg_rot_x(float x,float mat[4][4]){
     for(int i=0;i<4;i++){
@@ -217,8 +217,8 @@ void frg_rot_x(float x,float mat[4][4]){
         }
     }
     mat[1][1] = mat[2][2] = cosf(x);
-    mat[2][1] = sinf(x);
-    mat[1][2] = -mat[2][1];
+    mat[1][2] = sinf(x);
+    mat[2][1] = -mat[1][2];
 }
 void frg_rot_y(float x,float mat[4][4]){
     for(int i=0;i<4;i++){
@@ -227,8 +227,8 @@ void frg_rot_y(float x,float mat[4][4]){
         }
     }
     mat[0][0] = mat[2][2] = cosf(x);
-    mat[0][2] = sinf(x);
-    mat[2][0] = -mat[0][2];
+    mat[2][0] = sinf(x);
+    mat[0][2] = -mat[2][0];
 }
 void frg_rot_z(float x,float mat[4][4]){
     for(int i=0;i<4;i++){
@@ -237,8 +237,8 @@ void frg_rot_z(float x,float mat[4][4]){
         }
     }
     mat[0][0] = mat[1][1] = cosf(x);
-    mat[1][0] = sinf(x);
-    mat[0][1] = -mat[1][0];
+    mat[0][1] = sinf(x);
+    mat[1][0] = -mat[0][1];
 }
 //===================utf8 to unicode============
 FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
@@ -405,9 +405,15 @@ void frg_startup(const char * default_font_path){
     frp_anim_add_support("Rotate");
     frp_anim_add_support("TransX");
     frp_anim_add_support("TransY");
-
+    /* add some property */
     frp_flyc_add_parse_rule("HV",FRP_FLYC_PTYPE_NUM);
     frp_anim_add_support("HV");
+    frp_flyc_add_parse_rule("RotateX",FRP_FLYC_PTYPE_NUM);
+    frp_anim_add_support("RotateX");
+    frp_flyc_add_parse_rule("RotateY",FRP_FLYC_PTYPE_NUM);
+    frp_anim_add_support("RotateY");
+    frp_flyc_add_parse_rule("RotateZ",FRP_FLYC_PTYPE_NUM);
+    frp_anim_add_support("RotateZ");
 
     //declare that i support animation
 }
@@ -462,9 +468,9 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 
     frg_ids_transX = frp_play_get_property_id(file,"TransX");
     frg_ids_transY = frp_play_get_property_id(file,"TransY");
-    //frg_ids_rotX = frp_play_get_property_id(file,"RotateX");
-    //frg_ids_rotY = frp_play_get_property_id(file,"RotateY");
-    frg_ids_rotZ = frp_play_get_property_id(file,"Rotate");
+    frg_ids_rotX = frp_play_get_property_id(file,"RotateX");
+    frg_ids_rotY = frp_play_get_property_id(file,"RotateY");
+    frg_ids_rotZ = frp_play_get_property_id(file,"RotateZ");
     frg_ids_HV = frp_play_get_property_id(file,"HV");
 
     frp_size pid_text = frp_play_get_property_id(frg_frpfile,"Text");
@@ -820,10 +826,31 @@ void frg_renderline(FRPLine * line,frp_time time){
     float temp_mat[4][4];
     frg_mat_e(line_transform);
 
+    {
+        float cx = anchor_x * 2 - 1;
+        float cy = anchor_y * 2 - 1;
+
+        frg_mat_move(-cx,-cy,0,temp_mat);
+        frg_mat_mul(temp_mat,line_transform);
+
+
+        frg_rot_x(frp_play_property_float_value(time,line->values,frg_ids_rotX),temp_mat);
+        frg_mat_mul(temp_mat,line_transform);
+
+        frg_rot_y(frp_play_property_float_value(time,line->values,frg_ids_rotY),temp_mat);
+        frg_mat_mul(temp_mat,line_transform);
+
+        frg_rot_z(frp_play_property_float_value(time,line->values,frg_ids_rotZ),temp_mat);
+        frg_mat_mul(temp_mat,line_transform);
+
+        frg_mat_move(cx,cy,0,temp_mat);
+        frg_mat_mul(temp_mat,line_transform);
+    }
+
     //move
     frg_mat_move(
-        frp_play_property_float_value(time,line->values,frg_ids_transX),
-        frp_play_property_float_value(time,line->values,frg_ids_transY),
+        frp_play_property_float_value(time,line->values,frg_ids_transX) * frg_fontsize * 2. / frg_scr_width,
+        frp_play_property_float_value(time,line->values,frg_ids_transY) * frg_fontsize * 2. / frg_scr_height,
         0,
         temp_mat
     );
@@ -831,16 +858,50 @@ void frg_renderline(FRPLine * line,frp_time time){
 
 
     struct FRGNodeProperty * prop = FRGNodeProperties;
+
     for(FRPNode * n = line->node;n;n = n->next,prop++,i++){
         /* update node property */
-        pen_hx += FRGLines[linenum].node_args[i].kerning_h_x_off;
-        pen_vy += FRGLines[linenum].node_args[i].kerning_v_y_off;
+        struct FRGLineNodeArgs * nodearg = FRGLines[linenum].node_args + i;
+        pen_hx += nodearg->kerning_h_x_off;
+        pen_vy += nodearg->kerning_v_y_off;
 
         prop->h_x = pen_hx * 2. / frg_scr_width;
         prop->v_y = pen_vy * 2. / frg_scr_height;
 
-        pen_hx += FRGLines[linenum].node_args[i].h_width;
-        pen_vy -= FRGLines[linenum].node_args[i].v_height;
+
+        float sanchorx = frp_play_property_float_value(time,n->values,frg_ids_self_anchor_x);
+        float sanchory = frp_play_property_float_value(time,n->values,frg_ids_self_anchor_y);
+
+
+        float hcx = (pen_hx + nodearg->h_width * sanchorx) * 2. / frg_scr_width;
+        float hcy = FRGLineProperty.hy + frg_fontsize * sanchory;//???
+        float vcx = FRGLineProperty.vx + frg_fontsize * sanchorx;
+        float vcy = (pen_vy + nodearg->v_height * sanchory) * 2. / frg_scr_width;
+
+        float cx = (hcx - vcx) * cosf(FRGLineProperty.hv * 3.1415926) + vcx;
+        float cy = (vcy - hcy) * sinf(FRGLineProperty.hv * 3.1415926) + hcy;
+
+        frg_mat_e(prop->trans);
+        frg_mat_move(
+            -cx,-cy,0,prop->trans);
+        frg_rot_x(frp_play_property_float_value(time,n->values,frg_ids_rotX),temp_mat);
+        frg_mat_mul(temp_mat,prop->trans);
+        frg_rot_y(frp_play_property_float_value(time,n->values,frg_ids_rotY),temp_mat);
+        frg_mat_mul(temp_mat,prop->trans);
+
+        frg_rot_z(frp_play_property_float_value(time,n->values,frg_ids_rotZ),temp_mat);
+        frg_mat_mul(temp_mat,prop->trans);
+        frg_mat_move(cx,cy,0,temp_mat);
+        frg_mat_mul(temp_mat,prop->trans);
+        frg_mat_move(
+            frp_play_property_float_value(time,n->values,frg_ids_transX) * frg_fontsize * 2. / frg_scr_width,
+            frp_play_property_float_value(time,n->values,frg_ids_transY) * frg_fontsize * 2. / frg_scr_height,
+            0,
+            temp_mat
+        );
+        frg_mat_mul(temp_mat,prop->trans);
+
+        frg_mat_mul(line_transform,prop->trans);
 
         /* colors */
         prop->colorR = frp_play_property_float_value(time,n->values,frg_ids_colorR);
@@ -848,6 +909,10 @@ void frg_renderline(FRPLine * line,frp_time time){
         prop->colorB = frp_play_property_float_value(time,n->values,frg_ids_colorB);
         /* if alpha = 1,the word is hide.(for the default value = 0)*/
         prop->colorA =1 - frp_play_property_float_value(time,n->values,frg_ids_colorA);
+
+        /* append for next line */
+        pen_hx += nodearg->h_width;
+        pen_vy -= nodearg->v_height;
 
     }
 
