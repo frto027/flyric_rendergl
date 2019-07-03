@@ -109,6 +109,7 @@ void main(void){\
 
 FRPFile * frg_frpfile = NULL;
 //=================info of uniform in shader=================
+/* 这个结构体不再储存于GPU */
 struct FRGWordTextureInfo{
     GLfloat tex_x,tex_y;
     GLfloat tex_width,tex_height;
@@ -171,6 +172,15 @@ void frg_freelines(){
     }
 #undef FREE
 }
+//======================fonts=======================
+struct FRGFontNode{
+    frp_uint8 * fontname;
+    FT_Face * face;
+    int font_id;
+    struct FRGFontNode * next;
+}*FRGFontList = NULL;
+int frg_next_font_id = 0;
+
 //=====================matrix functions=============
 void frg_mat_e(float mat[4][4]){
     for(int i=0;i<4;i++)
@@ -358,7 +368,7 @@ int frg_index_of_word(FT_UInt word,int * isnew){
         *isnew = 1;
     return id+1;
 }
-void frg_change_font(FT_Library lib,FT_Face * face,const char * fontname,int len){
+void frg_change_font(FT_Face * face,const char * fontname,int len){
     if(fontname && len < 0){
         len = 0;
         while(fontname[len])
@@ -366,30 +376,119 @@ void frg_change_font(FT_Library lib,FT_Face * face,const char * fontname,int len
     }
     if(len == 0)
         fontname = NULL;
-    //TODO change font
-
-
-
-    //load default font
-    if(fontname == NULL){
-        *face = NULL;
+    //ALDO change font
+    struct FRGFontNode * got = FRGFontList;
+    if(got == NULL){
+        //error:no init
     }
-    if(*face == NULL){
-        FT_New_Face(lib,frg_default_font_path,0,
-        face);
-        frg_current_font_id = 0;//0 for default font
+    if(fontname == NULL){
+        while(got->next)
+            got = got->next;//default font
+    }else{
+        while(got->next){
+            int i;
+            for(i=0;i<len;i++){
+                if(fontname[i] != got->fontname[i])
+                    break;//for
+            }
+            if(i == len)
+                break;//while,founded
+            //not found
+            got = got->next;
         }
+    }
+    //frg_bool is_default_font = got->next == NULL;
+    *face = *(got->face);
+
+    //for frg_index_of_word used
+    frg_current_font_id = got->font_id;
 }
-void frg_change_font_frp_str(FT_Library lib,FT_Face * face,frp_str font){
+void frg_change_font_frp_str(FT_Face * face,frp_str font){
     if(!frg_frpfile)
         return;
     if(font.len)
-        frg_change_font(lib,face,frg_frpfile->textpool + font.beg,font.len);
+        frg_change_font(face,frg_frpfile->textpool + font.beg,font.len);
 }
 
 //==================programs=================
-void frg_startup(const char * default_font_path){
-    frg_default_font_path = default_font_path;
+void frg_add_font_file(FT_Library lib,frp_uint8 * fontname,const char * filepath,int index){
+    FT_Face * face = frpmalloc(sizeof(FT_Face));
+    FT_New_Face(lib,filepath,index,face);
+    if(!*face){
+        //error:create face failed
+        frpfree(face);
+        return;
+    }
+
+    struct FRGFontNode * n = frpmalloc(sizeof(struct FRGFontNode));
+    frp_size len = 0;
+    while(fontname[len++])
+        continue;
+    n->fontname = frpmalloc(sizeof(frp_uint8) * len);
+    while(len--)
+        n->fontname[len] = fontname[len];
+    n->face = face;
+    //if(frg_next_font_id < 2)
+    /* set pixel size */
+    FT_Set_Pixel_Sizes(*(n->face),0,frg_fontsize);
+
+    n->next = FRGFontList;
+    n->font_id = frg_next_font_id++;
+    FRGFontList = n;
+}
+void frg_add_font_alias(frp_uint8 * new_name,frp_uint8 * priv_fontname){
+    struct FRGFontNode * got = FRGFontList;
+    if(priv_fontname){
+        while(got && frpstr_rrcmp(got->fontname,priv_fontname) != 0){
+            got = got->next;
+        }
+    }else if(got){
+        //priv is default font
+        while(got->next)
+            got = got->next;
+    }
+
+    if(got){
+        //add new font here
+        struct FRGFontNode * n = frpmalloc(sizeof(struct FRGFontNode));
+        frp_size len = 0;
+        while(new_name[len++])
+            continue;
+        n->fontname = frpmalloc(sizeof(frp_uint8) * len);
+        while(len--)
+            n->fontname[len] = new_name[len];
+        n->face = got->face;
+        n->next = FRGFontList;
+        n->font_id = got->font_id;
+        FRGFontList = n;
+    }else{
+        //not found
+    }
+}
+void frg_free_fontlist(){
+    while(FRGFontList){
+        frpfree(FRGFontList->fontname);
+        if(*(FRGFontList->face)){
+            FT_Done_Face(*(FRGFontList->face));
+            *(FRGFontList->face) = NULL;
+        }
+        struct FRGFontNode * n = FRGFontList->next;
+        frpfree(FRGFontList);
+        FRGFontList = n;
+    }
+    frg_next_font_id = 0;
+}
+
+void frg_startup(FT_Library lib,const char * default_font_path,int default_font_index){
+    /* font init */
+    frg_free_fontlist();
+    FRGFontList = frpmalloc(sizeof(struct FRGFontNode));
+    FRGFontList->face = frpmalloc(sizeof(FT_Face));
+    FT_New_Face(lib,default_font_path,default_font_index,FRGFontList->face);
+    FRGFontList->fontname = NULL;
+    FRGFontList->next = NULL;
+
+    FRGFontList->font_id = frg_next_font_id++;
     frp_anim_add_support("ColorR");
     frp_anim_add_support("ColorG");
     frp_anim_add_support("ColorB");
@@ -419,8 +518,14 @@ void frg_shutdown(){
     frg_freelines();
 }
 
+
 void frg_fontsize_set(frp_size fontsize){
     frg_fontsize = fontsize;
+    struct FRGFontNode * n = FRGFontList;
+    while(n){
+        FT_Set_Pixel_Sizes(*(n->face),0,fontsize);
+        n = n->next;
+    }
 }
 
 void frg_screensize_set(frp_size width,frp_size height){
@@ -430,27 +535,16 @@ void frg_screensize_set(frp_size width,frp_size height){
         glUniform2f(frg_uniform_screenScale,2./frg_scr_width,2./frg_scr_height);
     }
 }
-int frg_loadlyric(FT_Library lib,FRPFile * file){
+int frg_loadlyric(FRPFile * file){
     if(!file)
         return FRG_LOAD_ERROR_INVALID_FILE;
     FT_Face face;
-
-    frg_change_font(lib,&face,NULL,0);
-    if(!face)
-        return FRG_LOAD_ERROR_FONT;
-
-    FT_Error err = FT_Set_Pixel_Sizes(face,0,frg_fontsize);
-    if(FT_Set_Pixel_Sizes(face,0,frg_fontsize) != 0){
-        FT_Done_Face(face);
-        return FRG_LOAD_ERROR_FONT;
-    }
 
     frg_frpfile = file;
 
 
     FRPSeg * flycseg = frp_getseg(frg_frpfile,"flyc");
     if(!flycseg){
-        FT_Done_Face(face);
         return 0;//no lines
     }
 
@@ -479,8 +573,6 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frp_size wordcount = 0;
     frp_size texture_count = 0;
     frp_size line_count = 0;
-    /* font kerning */
-    FT_Bool use_kerning = FT_HAS_KERNING(face);
 
     frp_size texture_x = 0,texture_y = 0;
     frp_size texture_next_tail = 0;
@@ -499,7 +591,10 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         }
 
         /* change font for current line */
-        frg_change_font_frp_str(lib,&face,frp_play_property_string_value(line->values,pid_font));
+        frg_change_font_frp_str(&face,frp_play_property_string_value(line->values,pid_font));
+        /* font kerning */
+        FT_Bool use_kerning = FT_HAS_KERNING(face);
+
         //update use kerning here please
         frp_size node_count = 0;
         for(FRPNode * node = line->node;node;node = node->next){
@@ -579,8 +674,10 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
         FRGLines[line_count].start_word = wordcount;
 
         /* change font for current line */
-        frg_change_font_frp_str(lib,&face,frp_play_property_string_value(line->values,pid_font));
-        //update use kerning here please
+        frg_change_font_frp_str(&face,frp_play_property_string_value(line->values,pid_font));
+        /* font kerning */
+        FT_Bool use_kerning = FT_HAS_KERNING(face);
+
         FT_UInt lastword = 0;
         frp_size nodecount = 0;
 

@@ -1,3 +1,5 @@
+/* notice:this file is used to debug library only.it create an openGL context with glfw. */
+
 #include <stdio.h>
 #include "fparser_public.h"
 
@@ -11,10 +13,12 @@ int wind_height = 600;
 
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
+    /* change windows size dynamically */
     wind_width = width;
     wind_height = height;
     frg_screensize_set(width,height);
 }
+
 char buff[1024 * 1024 * 100];
 int main(int argc,char **argv){
     if(argc != 3){
@@ -31,8 +35,12 @@ int main(int argc,char **argv){
     /*you MUST init flyric parser before frg_startup*/
     frpstartup();
     /* init flyric rendergl */
-    frg_startup(argv[1]);
-
+    frg_startup(freetypelib,argv[1],0);
+    /* here add all system fonts */
+    //frg_add_font_file(freetypelib,"bb","/home/frto027/Project/testFreeType/Deng.ttf",0);
+    //frg_add_font_file(freetypelib,"aa",argv[1],0);
+    //frg_add_font_alias("what called xxx","bb");
+    //frg_add_font_alias("xxx","what called xxx");
     /* init openGL context */
     glfwInit();
 
@@ -71,12 +79,11 @@ int main(int argc,char **argv){
             exit(-1);
         }
     }
+    frg_screensize_set(wind_width,wind_height);//单位是像素，可以频繁调用
 
-
-    frg_screensize_set(wind_width,wind_height);
-    frg_fontsize_set(60);
-
-    frg_loadlyric(freetypelib,file);
+    frg_fontsize_set(60);//单位是像素
+    frg_loadlyric(file);
+    //这以后不能调用frg_fontsize_set，如果要改变字体大小，需要再次调用frg_loadlyric后才能正常渲染。
 
     double start_time = glfwGetTime();
     int fps = 0;
@@ -114,7 +121,7 @@ int main(int argc,char **argv){
             lastfps = glfwGetTime();
         }
 
-        //wait for 1/60s
+        //wait for 1/60s here lock fps?
     }
 
     frg_shutdown();

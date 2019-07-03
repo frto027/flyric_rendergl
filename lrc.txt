@@ -19,18 +19,18 @@ WWWW,TransY,sin(x * 600) * 0.2,[Duration]/2
 RRRR,RotateZ,x * 3.1415926,[Duration],0,F
 ,RotateX
 [flyc]
-Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,RotateZ,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV,RotateX,RotateY
-line,0,between,Empty,,1,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5
+Type,StartTime,Duration,Text,Anim,ColorR,ColorG,ColorB,Style,TransX,TransY,RotateZ,ScaleX,ScaleY,AnchorX,AnchorY,SelfAnchorX,SelfAnchorY,ColorA,HV,RotateX,RotateY,Font
+line,0,between,Empty,,1,0,0,,0,0,0,0,0,0.5,0.5,0.5,0.5,0,0,0,0,aa
 line,1000,between,,RRRR,,,,,,,,,,
 word,>300,,comment\,test,WWWW,
 ,,,ok , ,
-line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1
+line,4000,4000,,FlyX|FlyY,,,,,,,,,,1,1,1,1,0,0,0,0,bb
 word,>1000,1000,A Sample ,WWWW,0,1,0
 ,,,Lyric, ,1,0,0
-line,3000,7000,,Cook,,,,,,,,,,0.5,0.5,0.5,0.5
+line,3000,7000,,Cook,,,,,,,,,,0.5,0.5,0.5,0.5,0,0,0,0,aa
 word,,,This is a lyric,,,
 
-line,0,100000,,,,,,,,,,,,0.8,0.8,0,1,,0
+line,0,100000,,,,,,,,,,,,0.8,0.8,0,1,,0,0,0,xxx
 word,,,The end,,,,,,,,,,,0,0,0,0,
 #[ly]
 #test segm

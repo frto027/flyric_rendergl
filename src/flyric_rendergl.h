@@ -6,16 +6,21 @@
 #include "ft2build.h"
 #include FT_FREETYPE_H
 
-extern void frg_startup(const char *default_font_path);
+extern void frg_startup(FT_Library lib,const char * default_font_path,int default_font_index);
 extern void frg_shutdown();
 
+extern void frg_add_font_file(FT_Library lib,frp_uint8 * fontname,const char * filepath,int index);
+extern void frg_add_font_alias(frp_uint8 * new_name,frp_uint8 * priv_fontname);
+
+//warring:you should reopen reload lyric if you change font size!(reload texture)
 extern void frg_fontsize_set(frp_size fontsize);
+
 extern void frg_screensize_set(frp_size width,frp_size height);
 //return 0 if success
 #define FRG_LOAD_ERROR_NONE             0
 #define FRG_LOAD_ERROR_FONT             -1
 #define FRG_LOAD_ERROR_INVALID_FILE     -2
-extern int frg_loadlyric(FT_Library lib,FRPFile * file);
+extern int frg_loadlyric(FRPFile * file);
 extern void frg_renderline(FRPLine * line,frp_time time);
 extern void frg_unloadlyrc();
 
