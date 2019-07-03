@@ -3,6 +3,12 @@
 //cos and sin
 #include <math.h>
 
+#define MAX_WORD_PER_LINE 510
+#define MAX_PROPERTY_PER_LINE 300
+
+#define TO_STR1(x) #x
+#define TO_STR(x) TO_STR1(x)
+
 frp_size frg_fontsize = 40;
 
 frp_size frg_scr_width = 800;
@@ -17,7 +23,7 @@ frp_bool frg_program_loaded = 0;
 GLuint frg_program;
 
 frp_bool frg_buffer_initailized = 0;
-GLuint frg_buffer_tex_coords,frg_buffer_wordinfos,frg_buffer_props,frg_buffer_lineprop;//,frg_uniform_lineprops,frg_uniform_propinfo;
+GLuint frg_buffer_wordinfos,frg_buffer_props,frg_buffer_lineprop;//,frg_uniform_lineprops,frg_uniform_propinfo;
 GLuint frg_buffer_points,frg_vertex_arr;
 GLint frg_uniform_screenScale;
 
@@ -40,10 +46,6 @@ point pos:
 */
 /* vertex shader */
 "#version 310 es\n\
-struct TexLocales{\
-    vec2 texcoord;\
-    vec2 texsize;\
-};\
 struct PropInfo{\
     vec2 hxvy;\
     vec2 scale;\
@@ -53,16 +55,16 @@ struct PropInfo{\
 struct WordInfo{\
     vec2 hoff;\
     vec2 voff;\
+    vec2 texcoord;\
+    vec2 texsize;\
     int texid;\
     int propid;\
 };\
-layout (std140, binding = 1) uniform TexCoorBlock{ TexLocales tex_coords[3];};\
-layout (std140, binding = 2) uniform PropInfoBlock{ PropInfo props[100]; };\
-layout (std140, binding = 3) uniform WordInfoBlock{ WordInfo words[300]; };\
+layout (std140, binding = 2) uniform PropInfoBlock{ PropInfo props["TO_STR(MAX_PROPERTY_PER_LINE)"]; };\
+layout (std140, binding = 3) uniform WordInfoBlock{ WordInfo words["TO_STR(MAX_WORD_PER_LINE)"]; };\
 layout (std140, binding = 4) uniform LineProps{\
     vec2 vxhy;\
     float hv;\
-    int start_wordid;\
 };\
 uniform vec2 screenScale;\
 layout (location = 0) in int pos_mark;\
@@ -71,22 +73,21 @@ out float rcc;\
 out vec4 word_color;\
 void main(void){\
     rcc = 0.;\
-    int windex = start_wordid + gl_InstanceID;\
-    int tid = words[windex].texid;\
+    int windex = gl_InstanceID;\
     int pid = words[windex].propid;\
     vec2 hpos = vec2(props[pid].hxvy.x,vxhy.y) + words[windex].hoff * screenScale;\
     vec2 vpos = vec2(vxhy.x,props[pid].hxvy.y) + words[windex].voff * screenScale;\
     vec2 pos = vec2(\
     (hpos.x - vpos.x) * cos(hv*3.1415926/2.) + vpos.x,\
     (vpos.y - hpos.y) * sin(hv*3.1415926/2.) + hpos.y);\
-    tex_coord = tex_coords[tid].texcoord;\
+    tex_coord = words[windex].texcoord;\
     if(pos_mark == 1 || pos_mark == 2){\
-        pos.x += tex_coords[tid].texsize.x * screenScale.x;\
-        tex_coord.x += + tex_coords[tid].texsize.x;\
+        pos.x += words[windex].texsize.x * screenScale.x;\
+        tex_coord.x += + words[windex].texsize.x;\
     }\
     if(pos_mark == 2 || pos_mark == 3){\
-        pos.y += - tex_coords[tid].texsize.y * screenScale.y;\
-        tex_coord.y += + tex_coords[tid].texsize.y;\
+        pos.y += - words[windex].texsize.y * screenScale.y;\
+        tex_coord.y += + words[windex].texsize.y;\
     }\
     gl_Position = props[pid].trans * vec4(pos,0,1);\
     word_color = props[pid].color;\
@@ -101,9 +102,7 @@ in highp float rcc;\
 in highp vec4 word_color;\
 out highp vec4 color;\
 void main(void){\
-\
     color = texture(tex,tex_coord * texScale).rrrr * word_color;\
-"/*"    color += word_color;"*/"\
 }\
 "
 };
@@ -117,6 +116,7 @@ struct FRGWordTextureInfo{
 struct FRGWordInfo{
     GLfloat h_x_off,h_y_off;//文字水平布局时候左下距离property_id对应的Node的偏移
     GLfloat v_x_off,v_y_off;//文字垂直布局时候左下距离propryty_id对应的Node的偏移
+    GLfloat texcoor_x,texcoor_y,texsize_w,texsize_h;
     //float half_w,half_h;//文字半宽半高 你为什么不问问word_id对应的FRGWordTextureInfo呢？
     GLint tex_id;
     GLint property_id;
@@ -134,8 +134,6 @@ struct FRGNodeProperty{//fill it in runtime
 struct{
     GLfloat vx,hy;
     GLfloat hv;
-    GLint start_word;
-
 }FRGLineProperty;
 
 int frg_max_word_count = 0;
@@ -490,8 +488,15 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     frp_size max_node_count = 0;
     /* get the wordcount,max_node_count and texture size*/
     frg_clear_index_of_word();
+    /*start of word info MUST align with the value(used by BindBufferRange) */
+    GLint uniform_buffer_align = 1;
+    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT,&uniform_buffer_align);
 
     for(FRPLine * line = flycseg->flyc.lines;line;line = line->next){
+        /* align memory here */
+        if(wordcount % uniform_buffer_align != 0){
+            wordcount = (wordcount/uniform_buffer_align + 1)*uniform_buffer_align;
+        }
 
         /* change font for current line */
         frg_change_font_frp_str(lib,&face,frp_play_property_string_value(line->values,pid_font));
@@ -565,6 +570,11 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     //上面和下面的坐标计算必须一致
     frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0,line_count = 0;
     for(FRPLine * line = flycseg->flyc.lines;line;line = line->next){
+        /* align memory here */
+        if(wordcount % uniform_buffer_align != 0){
+            wordcount = (wordcount/uniform_buffer_align + 1)*uniform_buffer_align;
+        }
+
         /* start word property */
         FRGLines[line_count].start_word = wordcount;
 
@@ -601,7 +611,9 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 
                 int isnew;
                 int tex_id = FRGWords[wordcount].tex_id = frg_index_of_word(curr,&isnew);
+
                 FRGWords[wordcount].property_id = nodecount;
+
                 if(isnew){
                     //add texture locale
                     FT_Load_Glyph(face,curr,FT_LOAD_RENDER);
@@ -629,6 +641,13 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
                     //do not setup texture
                     FT_Load_Glyph(face,curr,FT_LOAD_DEFAULT);
                 }
+
+                /* fill texture info with tex_id */
+                FRGWords[wordcount].texcoor_x = FRGWordTextureLocales[tex_id].tex_x;
+                FRGWords[wordcount].texcoor_y = FRGWordTextureLocales[tex_id].tex_y;
+                FRGWords[wordcount].texsize_w = FRGWordTextureLocales[tex_id].tex_width;
+                FRGWords[wordcount].texsize_h = FRGWordTextureLocales[tex_id].tex_height;
+
                 //calculate begin pos of word
                 //TODO:locale calculate of glyph
                 struct FRGLineNodeArgs * nodeargs = FRGLines[line_count].node_args + nodecount;
@@ -731,7 +750,6 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     if(!frg_buffer_initailized){
         frg_buffer_initailized = 1;
         glGenBuffers(1,&frg_buffer_props);
-        glGenBuffers(1,&frg_buffer_tex_coords);
         glGenBuffers(1,&frg_buffer_wordinfos);
         glGenBuffers(1,&frg_buffer_lineprop);
 
@@ -739,9 +757,6 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
     }
 
     /* buffer datas */
-    glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_tex_coords);
-    glBufferData(GL_UNIFORM_BUFFER,sizeof(struct FRGWordTextureInfo) * texture_count,FRGWordTextureLocales,GL_STATIC_DRAW);
-
     glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_props);
     glBufferData(GL_UNIFORM_BUFFER,sizeof(struct FRGNodeProperty) * max_node_count,NULL,GL_DYNAMIC_DRAW);
 
@@ -764,7 +779,6 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 
     /* bind with uniform */
 
-    glBindBufferBase(GL_UNIFORM_BUFFER,1,frg_buffer_tex_coords);
     glBindBufferBase(GL_UNIFORM_BUFFER,2,frg_buffer_props);
     glBindBufferBase(GL_UNIFORM_BUFFER,3,frg_buffer_wordinfos);
     glBindBufferBase(GL_UNIFORM_BUFFER,4,frg_buffer_lineprop);
@@ -798,8 +812,9 @@ int frg_loadlyric(FT_Library lib,FRPFile * file){
 void frg_renderline(FRPLine * line,frp_time time){
     int i = 0;
     int linenum = line->linenumber;
+
     /* update line property */
-    FRGLineProperty.start_word = FRGLines[linenum].start_word;
+    glBindBufferRange(GL_UNIFORM_BUFFER,3,frg_buffer_wordinfos,(GLintptr)(sizeof(struct FRGWordInfo) * FRGLines[linenum].start_word),sizeof(struct FRGWordInfo) * FRGLines[linenum].word_count);
     FRGLineProperty.hy = 0;
     FRGLineProperty.vx = 0;
 
@@ -929,15 +944,12 @@ void frg_renderline(FRPLine * line,frp_time time){
     glBindVertexArray(frg_vertex_arr);
     glDrawArraysInstanced(GL_TRIANGLE_FAN,0,4,FRGLines[linenum].word_count);
 
-
-
 }
 void frg_unloadlyrc(){
     frg_freelines();
     frg_clear_index_of_word();
     frg_buffer_initailized = 0;
     glDeleteBuffers(1,&frg_buffer_props);
-    glDeleteBuffers(1,&frg_buffer_tex_coords);
     glDeleteBuffers(1,&frg_buffer_wordinfos);
 
 }

@@ -15,7 +15,7 @@ void window_size_callback(GLFWwindow* window, int width, int height)
     wind_height = height;
     frg_screensize_set(width,height);
 }
-
+char buff[1024 * 1024];
 int main(int argc,char **argv){
     if(argc != 3){
         printf("usage: main_linux [font_path] [lyric_path]\n");
@@ -46,17 +46,16 @@ int main(int argc,char **argv){
     glfwSetWindowSizeCallback(window, window_size_callback);
 
     glfwMakeContextCurrent(window);
-	
+
 #ifdef __GLEW_H__
 	glewInit();
 #endif
-	
+
     /* 背景透明 */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
     /* prepare a lyric file */
-    char buff[4096];
     FRPFile * file;
     {
         FILE * f = fopen(argv[2],"rb");
@@ -74,7 +73,7 @@ int main(int argc,char **argv){
     }
 
 
-    frg_screensize_set(800,600);
+    frg_screensize_set(wind_width,wind_height);
     frg_fontsize_set(60);
 
     frg_loadlyric(freetypelib,file);
