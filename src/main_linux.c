@@ -15,7 +15,7 @@ void window_size_callback(GLFWwindow* window, int width, int height)
     wind_height = height;
     frg_screensize_set(width,height);
 }
-char buff[1024 * 1024];
+char buff[1024 * 1024 * 100];
 int main(int argc,char **argv){
     if(argc != 3){
         printf("usage: main_linux [font_path] [lyric_path]\n");
@@ -80,6 +80,7 @@ int main(int argc,char **argv){
 
     double start_time = glfwGetTime();
     int fps = 0;
+    int linecount = 0,begline = 0,endline = 0;
     double lastfps = start_time;
     while(!glfwWindowShouldClose(window)){
 
@@ -92,16 +93,23 @@ int main(int argc,char **argv){
         double tim = glfwGetTime() - start_time;
         frp_time ftim = (frp_time)(tim*1000);
 
-
         //render line
+        begline = -1;
+        linecount=0;
         for(FRTNode * tnode = frp_play_getline_by_time(file,ftim);tnode;tnode = tnode->next){
+            if(begline < 0)
+                begline = tnode->line->linenumber;
             frg_renderline(tnode->line,ftim);
+            linecount++;
+            endline = tnode->line->linenumber;
         }
+
+
         glfwSwapBuffers(window);
         glfwPollEvents();
         fps++;
         if(glfwGetTime() - lastfps > 1){
-            printf("fps = %d\n",fps);
+            printf("fps = %d,last frame :linecount = %d(from %d to %d)\n",fps,linecount,begline,endline);
             fps = 0;
             lastfps = glfwGetTime();
         }
