@@ -406,8 +406,7 @@ void frg_change_font(FT_Face * face,const char * fontname,int len){
 void frg_change_font_frp_str(FT_Face * face,frp_str font){
     if(!frg_frpfile)
         return;
-    if(font.len)
-        frg_change_font(face,frg_frpfile->textpool + font.beg,font.len);
+    frg_change_font(face,frg_frpfile->textpool + font.beg,font.len);
 }
 
 //==================programs=================
