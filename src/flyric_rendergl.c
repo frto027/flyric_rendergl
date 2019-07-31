@@ -904,6 +904,8 @@ int frg_loadlyric(FRPFile * file){
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
     glEnableVertexAttribArray(0);
     */
+
+    return FRG_LOAD_ERROR_NONE;
 }
 void frg_renderline(FRPLine * line,frp_time time){
     int i = 0;
