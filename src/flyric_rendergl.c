@@ -987,8 +987,8 @@ void frg_renderline(FRPLine * line,frp_time time){
 
 
         float hcx = (pen_hx + nodearg->h_width * sanchorx) * 2. / frg_scr_width;
-        float hcy = FRGLineProperty.hy + frg_fontsize * sanchory;//???
-        float vcx = FRGLineProperty.vx + frg_fontsize * sanchorx;
+        float hcy = FRGLineProperty.hy + frg_fontsize * sanchory * 2./frg_scr_height;//???
+        float vcx = FRGLineProperty.vx + frg_fontsize * sanchorx * 2./frg_scr_width;
         float vcy = (pen_vy + nodearg->v_height * sanchory) * 2. / frg_scr_width;
 
         float cx = (hcx - vcx) * cosf(FRGLineProperty.hv * 3.1415926) + vcx;
