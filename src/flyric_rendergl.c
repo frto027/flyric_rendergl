@@ -619,13 +619,13 @@ int frg_loadlyric(FRPFile * file){
                     //check return or not
                     if(texture_x + bitmap->width >= FRG_TEXTURE_MAX_WIDTH){
                         texture_x = 0;
-                        texture_y = texture_next_tail;
+                        texture_y = texture_next_tail + 1;
                     }
                     //update texture tail
                     if(texture_y + bitmap->rows > texture_next_tail)
                         texture_next_tail = texture_y + bitmap->rows;
                     //now texture_x,texture_y is the locale of word[wordcount]'s texture
-                    texture_x += bitmap->width;
+                    texture_x += bitmap->width + 1;
                 }
                 wordcount++;
             }
@@ -717,7 +717,7 @@ int frg_loadlyric(FRPFile * file){
                     //check return or not
                     if(texture_x + bitmap->width >= FRG_TEXTURE_MAX_WIDTH){
                         texture_x = 0;
-                        texture_y = texture_next_tail;
+                        texture_y = texture_next_tail + 1;
                     }
                     //update texture tail
                     if(texture_y + bitmap->rows > texture_next_tail)
@@ -732,7 +732,7 @@ int frg_loadlyric(FRPFile * file){
                     texinfo->tex_width = bitmap->width;
                     texinfo->tex_height = bitmap->rows;
 
-                    texture_x += bitmap->width;
+                    texture_x += bitmap->width + 1;
                 }else{
                     //do not setup texture
                     FT_Load_Glyph(face,curr,FT_LOAD_DEFAULT);
