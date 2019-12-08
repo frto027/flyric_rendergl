@@ -9,32 +9,30 @@
 #define TO_STR1(x) #x
 #define TO_STR(x) TO_STR1(x)
 
-frp_size frg_fontsize = 40;
+static frp_size frg_fontsize = 40;
 
-frp_size frg_scr_width = 800;
-frp_size frg_scr_height = 600;
+static frp_size frg_scr_width = 800;
+static frp_size frg_scr_height = 600;
 
-const char * frg_default_font_path;
+static frp_bool frg_has_texture = 0;
+static GLuint frg_texture = 0;
 
-frp_bool frg_has_texture = 0;
-GLuint frg_texture = 0;
+static frp_bool frg_program_loaded = 0;
+static GLuint frg_program;
 
-frp_bool frg_program_loaded = 0;
-GLuint frg_program;
+static frp_bool frg_buffer_initailized = 0;
+static GLuint frg_buffer_wordinfos,frg_buffer_props,frg_buffer_lineprop;//,frg_uniform_lineprops,frg_uniform_propinfo;
+static GLuint frg_buffer_points,frg_vertex_arr;
+static GLint frg_uniform_screenScale;
 
-frp_bool frg_buffer_initailized = 0;
-GLuint frg_buffer_wordinfos,frg_buffer_props,frg_buffer_lineprop;//,frg_uniform_lineprops,frg_uniform_propinfo;
-GLuint frg_buffer_points,frg_vertex_arr;
-GLint frg_uniform_screenScale;
+static GLint frg_point_ids [] = {0,1,2,3};
 
-GLint frg_point_ids [] = {0,1,2,3};
-
-frp_size frg_ids_colorR,frg_ids_colorG,frg_ids_colorB,frg_ids_colorA,
+static frp_size frg_ids_colorR,frg_ids_colorG,frg_ids_colorB,frg_ids_colorA,
     frg_ids_anchor_x,frg_ids_anchor_y,frg_ids_self_anchor_x,frg_ids_self_anchor_y,
     frg_ids_transX,frg_ids_transY,frg_ids_rotX,frg_ids_rotY,frg_ids_rotZ,
     frg_ids_HV;
 
-const char * frg_shaders[] = {
+static const char * frg_shaders[] = {
 /*
 struct TexLocales is FRGWordTextureInfo in C language.
 struct PropInfo is FRGNodeProperty in c lang.
@@ -107,14 +105,14 @@ void main(void){\
 "
 };
 
-FRPFile * frg_frpfile = NULL;
+static FRPFile * frg_frpfile = NULL;
 //=================info of uniform in shader=================
 /* 这个结构体不再储存于GPU */
-struct FRGWordTextureInfo{
+static struct FRGWordTextureInfo{
     GLfloat tex_x,tex_y;
     GLfloat tex_width,tex_height;
 }*FRGWordTextureLocales = NULL;//for each word(texture)
-struct FRGWordInfo{
+static struct FRGWordInfo{
     GLfloat h_x_off,h_y_off;//文字水平布局时候左下距离property_id对应的Node的偏移
     GLfloat v_x_off,v_y_off;//文字垂直布局时候左下距离propryty_id对应的Node的偏移
     GLfloat texcoor_x,texcoor_y,texsize_w,texsize_h;
@@ -123,7 +121,7 @@ struct FRGWordInfo{
     GLint property_id;
     GLint PADDING[2];
 }*FRGWords = NULL;//for each word
-struct FRGNodeProperty{//fill it in runtime
+static struct FRGNodeProperty{//fill it in runtime
     GLfloat h_x/*,h_y*/;//y is the baseline locale(uniform) TODO
     GLfloat /*v_x,*/v_y;//x is the baseline locale(uniform) TODO
     GLfloat scaleX,scaleY;
@@ -132,12 +130,11 @@ struct FRGNodeProperty{//fill it in runtime
     //others
 }*FRGNodeProperties = NULL;//for each node
 
-struct{
+static struct{
     GLfloat vx,hy;
     GLfloat hv;
 }FRGLineProperty;
 
-int frg_max_word_count = 0;
 
 // ================texture locale of each word=========================
 /* for cpu use only */
@@ -146,13 +143,13 @@ struct FRGLineNodeArgs{
     float h_width,v_height;
 };
 
-struct FRGline{
+static struct FRGline{
     int start_word;//从哪个字开始渲染
     int word_count;//渲染几个字
     float h_width,v_height;
     struct FRGLineNodeArgs * node_args;
 }*FRGLines = NULL;
-frp_size FRGLinesSize = 0;
+static frp_size FRGLinesSize = 0;
 void frg_freelines(){
 #define FREE(x) do{if(x) {frpfree(x);x=NULL;}}while(0)
     FREE(FRGWordTextureLocales);
@@ -173,13 +170,14 @@ void frg_freelines(){
 #undef FREE
 }
 //======================fonts=======================
-struct FRGFontNode{
+static struct FRGFontNode{
     frp_uint8 * fontname;
     FT_Face * face;
     int font_id;
+    int __PADDING__[3];
     struct FRGFontNode * next;
 }*FRGFontList = NULL;
-int frg_next_font_id = 0;
+static int frg_next_font_id = 0;
 
 //=====================matrix functions=============
 void frg_mat_e(float mat[4][4]){
@@ -316,15 +314,15 @@ FT_ULong frg_utf8_to_unicode(FT_Bytes utfch,int *skip){
 }
 
 /* font id current line used when load lyric */
-int frg_current_font_id = 0;
+static int frg_current_font_id = 0;
 
 /* linked list relization for font map */
-struct FRGFontMapNode{
+static struct FRGFontMapNode{
     FT_UInt word;
     int fontid;
     struct FRGFontMapNode * next;
 }*FRGFontMaps = NULL;
-int frg_clear_index_of_word(){
+void frg_clear_index_of_word(){
     while(FRGFontMaps){
         struct FRGFontMapNode * n = FRGFontMaps->next;
         frpfree(FRGFontMaps);
@@ -332,7 +330,7 @@ int frg_clear_index_of_word(){
     }
 }
 int frg_index_of_word(FT_UInt word,int * isnew){
-    static int last = 0;
+    //static int last = 0;
     if(isnew)
         *isnew = 1;
     //TODO this is a hash map,defferent font should use defferent index!
@@ -406,7 +404,7 @@ void frg_change_font(FT_Face * face,const char * fontname,int len){
 void frg_change_font_frp_str(FT_Face * face,frp_str font){
     if(!frg_frpfile)
         return;
-    frg_change_font(face,frg_frpfile->textpool + font.beg,font.len);
+    frg_change_font(face,(const char *)(frg_frpfile->textpool + font.beg),(int)font.len);
 }
 
 //==================programs=================
@@ -488,28 +486,29 @@ void frg_startup(FT_Library lib,const char * default_font_path,int default_font_
     FRGFontList->next = NULL;
 
     FRGFontList->font_id = frg_next_font_id++;
-    frp_anim_add_support("ColorR");
-    frp_anim_add_support("ColorG");
-    frp_anim_add_support("ColorB");
-    frp_anim_add_support("ColorA");
 
-    frp_anim_add_support("AnchorX");
-    frp_anim_add_support("AnchorY");
-    frp_anim_add_support("SelfAnchorX");
-    frp_anim_add_support("SelfAnchorY");
+    frp_anim_add_support((const frp_uint8 *)"ColorR");
+    frp_anim_add_support((const frp_uint8 *)"ColorG");
+    frp_anim_add_support((const frp_uint8 *)"ColorB");
+    frp_anim_add_support((const frp_uint8 *)"ColorA");
 
-    frp_anim_add_support("Rotate");
-    frp_anim_add_support("TransX");
-    frp_anim_add_support("TransY");
+    frp_anim_add_support((const frp_uint8 *)"AnchorX");
+    frp_anim_add_support((const frp_uint8 *)"AnchorY");
+    frp_anim_add_support((const frp_uint8 *)"SelfAnchorX");
+    frp_anim_add_support((const frp_uint8 *)"SelfAnchorY");
+
+    frp_anim_add_support((const frp_uint8 *)"Rotate");
+    frp_anim_add_support((const frp_uint8 *)"TransX");
+    frp_anim_add_support((const frp_uint8 *)"TransY");
     /* add some property */
     frp_flyc_add_parse_rule("HV",FRP_FLYC_PTYPE_NUM);
-    frp_anim_add_support("HV");
+    frp_anim_add_support((const frp_uint8 *)"HV");
     frp_flyc_add_parse_rule("RotateX",FRP_FLYC_PTYPE_NUM);
-    frp_anim_add_support("RotateX");
+    frp_anim_add_support((const frp_uint8 *)"RotateX");
     frp_flyc_add_parse_rule("RotateY",FRP_FLYC_PTYPE_NUM);
-    frp_anim_add_support("RotateY");
+    frp_anim_add_support((const frp_uint8 *)"RotateY");
     frp_flyc_add_parse_rule("RotateZ",FRP_FLYC_PTYPE_NUM);
-    frp_anim_add_support("RotateZ");
+    frp_anim_add_support((const frp_uint8 *)"RotateZ");
 
     //declare that i support animation
 }
@@ -531,7 +530,7 @@ void frg_screensize_set(frp_size width,frp_size height){
     frg_scr_width = width;
     frg_scr_height = height;
     if(frg_buffer_initailized){
-        glUniform2f(frg_uniform_screenScale,2./frg_scr_width,2./frg_scr_height);
+        glUniform2f(frg_uniform_screenScale,2.f/frg_scr_width,2.f/frg_scr_height);
     }
 }
 int frg_loadlyric(FRPFile * file){
@@ -542,30 +541,30 @@ int frg_loadlyric(FRPFile * file){
     frg_frpfile = file;
 
 
-    FRPSeg * flycseg = frp_getseg(frg_frpfile,"flyc");
+    FRPSeg * flycseg = frp_getseg(frg_frpfile,(const frp_uint8 *)"flyc");
     if(!flycseg){
         return 0;//no lines
     }
 
     /* init ids */
-    frg_ids_colorR = frp_play_get_property_id(file,"ColorR");
-    frg_ids_colorG = frp_play_get_property_id(file,"ColorG");
-    frg_ids_colorB = frp_play_get_property_id(file,"ColorB");
-    frg_ids_colorA = frp_play_get_property_id(file,"ColorA");
-    frg_ids_anchor_x = frp_play_get_property_id(file,"AnchorX");
-    frg_ids_anchor_y = frp_play_get_property_id(file,"AnchorY");
-    frg_ids_self_anchor_x = frp_play_get_property_id(file,"SelfAnchorX");
-    frg_ids_self_anchor_y = frp_play_get_property_id(file,"SelfAnchorY");
+    frg_ids_colorR = frp_play_get_property_id(file,(const frp_uint8 *)"ColorR");
+    frg_ids_colorG = frp_play_get_property_id(file,(const frp_uint8 *)"ColorG");
+    frg_ids_colorB = frp_play_get_property_id(file,(const frp_uint8 *)"ColorB");
+    frg_ids_colorA = frp_play_get_property_id(file,(const frp_uint8 *)"ColorA");
+    frg_ids_anchor_x = frp_play_get_property_id(file,(const frp_uint8 *)"AnchorX");
+    frg_ids_anchor_y = frp_play_get_property_id(file,(const frp_uint8 *)"AnchorY");
+    frg_ids_self_anchor_x = frp_play_get_property_id(file,(const frp_uint8 *)"SelfAnchorX");
+    frg_ids_self_anchor_y = frp_play_get_property_id(file,(const frp_uint8 *)"SelfAnchorY");
 
-    frg_ids_transX = frp_play_get_property_id(file,"TransX");
-    frg_ids_transY = frp_play_get_property_id(file,"TransY");
-    frg_ids_rotX = frp_play_get_property_id(file,"RotateX");
-    frg_ids_rotY = frp_play_get_property_id(file,"RotateY");
-    frg_ids_rotZ = frp_play_get_property_id(file,"RotateZ");
-    frg_ids_HV = frp_play_get_property_id(file,"HV");
+    frg_ids_transX = frp_play_get_property_id(file,(const frp_uint8 *)"TransX");
+    frg_ids_transY = frp_play_get_property_id(file,(const frp_uint8 *)"TransY");
+    frg_ids_rotX = frp_play_get_property_id(file,(const frp_uint8 *)"RotateX");
+    frg_ids_rotY = frp_play_get_property_id(file,(const frp_uint8 *)"RotateY");
+    frg_ids_rotZ = frp_play_get_property_id(file,(const frp_uint8 *)"RotateZ");
+    frg_ids_HV = frp_play_get_property_id(file,(const frp_uint8 *)"HV");
 
-    frp_size pid_text = frp_play_get_property_id(frg_frpfile,"Text");
-    frp_size pid_font = frp_play_get_property_id(frg_frpfile,"Font");
+    frp_size pid_text = frp_play_get_property_id(frg_frpfile,(const frp_uint8 *)"Text");
+    frp_size pid_font = frp_play_get_property_id(frg_frpfile,(const frp_uint8 *)"Font");
 
     FRGLines = frpmalloc(sizeof(struct FRGline) * flycseg->flyc.linenumber_all);
 
@@ -585,14 +584,14 @@ int frg_loadlyric(FRPFile * file){
 
     for(FRPLine * line = flycseg->flyc.lines;line;line = line->next){
         /* align memory here */
-        if(wordcount % uniform_buffer_align != 0){
-            wordcount = (wordcount/uniform_buffer_align + 1)*uniform_buffer_align;
+        if(wordcount % (unsigned int)uniform_buffer_align != 0){
+            wordcount = (wordcount/(unsigned int)uniform_buffer_align + 1)*(unsigned int)uniform_buffer_align;
         }
 
         /* change font for current line */
         frg_change_font_frp_str(&face,frp_play_property_string_value(line->values,pid_font));
         /* font kerning */
-        FT_Bool use_kerning = FT_HAS_KERNING(face);
+        //FT_Bool use_kerning = FT_HAS_KERNING(face);
 
         //update use kerning here please
         frp_size node_count = 0;
@@ -656,21 +655,21 @@ int frg_loadlyric(FRPFile * file){
         glGenTextures(1,&frg_texture);
     }
     glBindTexture(GL_TEXTURE_2D,frg_texture);
-    glTexStorage2D(GL_TEXTURE_2D,1,GL_R8,FRG_TEXTURE_MAX_WIDTH,mxsize);
+    glTexStorage2D(GL_TEXTURE_2D,1,GL_R8,FRG_TEXTURE_MAX_WIDTH,(GLsizei)mxsize);
 
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 
     //TODO:init texture locale,word id(locale),property id
     //上面和下面的坐标计算必须一致
-    frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0,line_count = 0;
+    frg_clear_index_of_word();wordcount = 0;texture_x=texture_y=texture_next_tail=0;line_count = 0;
     for(FRPLine * line = flycseg->flyc.lines;line;line = line->next){
         /* align memory here */
-        if(wordcount % uniform_buffer_align != 0){
-            wordcount = (wordcount/uniform_buffer_align + 1)*uniform_buffer_align;
+        if(wordcount % (unsigned int)uniform_buffer_align != 0){
+            wordcount = (wordcount/(unsigned int)uniform_buffer_align + 1)*(unsigned int)uniform_buffer_align;
         }
 
         /* start word property */
-        FRGLines[line_count].start_word = wordcount;
+        FRGLines[line_count].start_word = (int)wordcount;
 
         /* change font for current line */
         frg_change_font_frp_str(&face,frp_play_property_string_value(line->values,pid_font));
@@ -693,7 +692,6 @@ int frg_loadlyric(FRPFile * file){
             frpstr_fill(frg_frpfile->textpool,s,buff,sizeof(frp_uint8)*(s.len + 5));
             int buff_index = 0;
             //recalculate offset used
-            int begin_word_index = wordcount;
 
             int pen_h_x = 0,pen_v_y = 0;
 
@@ -708,7 +706,7 @@ int frg_loadlyric(FRPFile * file){
                 int isnew;
                 int tex_id = FRGWords[wordcount].tex_id = frg_index_of_word(curr,&isnew);
 
-                FRGWords[wordcount].property_id = nodecount;
+                FRGWords[wordcount].property_id = (GLint)nodecount;
 
                 if(isnew){
                     //add texture locale
@@ -724,7 +722,7 @@ int frg_loadlyric(FRPFile * file){
                         texture_next_tail = texture_y + bitmap->rows;
                     //now texture_x,texture_y is the locale of word[wordcount]'s texture
                     //load to texture
-                    glTexSubImage2D(GL_TEXTURE_2D,0,texture_x,texture_y,bitmap->width,bitmap->rows,GL_RED,GL_UNSIGNED_BYTE,bitmap->buffer);
+                    glTexSubImage2D(GL_TEXTURE_2D,0,(GLint)texture_x,(GLint)texture_y,(GLsizei)bitmap->width,(GLsizei)bitmap->rows,GL_RED,GL_UNSIGNED_BYTE,bitmap->buffer);
 
                     struct FRGWordTextureInfo * texinfo = FRGWordTextureLocales + tex_id;
                     texinfo->tex_x = texture_x;
@@ -791,7 +789,7 @@ int frg_loadlyric(FRPFile * file){
         }
 
         /* word count property */
-        FRGLines[line_count].word_count = wordcount - FRGLines[line_count].start_word;
+        FRGLines[line_count].word_count =(int)wordcount - FRGLines[line_count].start_word;
         FRGLines[line_count].h_width = line_pen_hx;
         FRGLines[line_count].v_height = - line_pen_vy;
         line_count++;
@@ -884,12 +882,12 @@ int frg_loadlyric(FRPFile * file){
     //glUniformBlockBinding(frg_program,glGetUniformBlockIndex(frg_program,"LineProps"),frg_buffer_lineprop);
 
     /* texture Scales */
-    glUniform2f(glGetUniformLocation(frg_program,"texScale"),1./FRG_TEXTURE_MAX_WIDTH,1./mxsize);
+    glUniform2f(glGetUniformLocation(frg_program,"texScale"),1.f/FRG_TEXTURE_MAX_WIDTH,1.f/mxsize);
 
     /* uniforms filled when rendering */
     //frg_uniform_lineprop = glGetUniformBlockIndex(frg_program,"LineProps");
     frg_uniform_screenScale = glGetUniformLocation(frg_program,"screenScale");
-    glUniform2f(frg_uniform_screenScale,2./frg_scr_width,2./frg_scr_height);
+    glUniform2f(frg_uniform_screenScale,2.f/frg_scr_width,2.f/frg_scr_height);
     //frg_uniform_lineprops = glGetUniformBlockIndex(frg_program,"LineProps");
     //frg_uniform_propinfo = glGetUniformBlockIndex(frg_program,"PropInfoBlock");
     //frg_buffer_props
@@ -909,10 +907,10 @@ int frg_loadlyric(FRPFile * file){
 }
 void frg_renderline(FRPLine * line,frp_time time){
     int i = 0;
-    int linenum = line->linenumber;
+    unsigned int linenum = line->linenumber;
 
     /* update line property */
-    glBindBufferRange(GL_UNIFORM_BUFFER,3,frg_buffer_wordinfos,(GLintptr)(sizeof(struct FRGWordInfo) * FRGLines[linenum].start_word),sizeof(struct FRGWordInfo) * FRGLines[linenum].word_count);
+    glBindBufferRange(GL_UNIFORM_BUFFER,3,frg_buffer_wordinfos,(GLintptr)((int)sizeof(struct FRGWordInfo) * FRGLines[linenum].start_word),(int)sizeof(struct FRGWordInfo) * FRGLines[linenum].word_count);
     FRGLineProperty.hy = 0;
     FRGLineProperty.vx = 0;
 
@@ -929,9 +927,9 @@ void frg_renderline(FRPLine * line,frp_time time){
 
     /* horizental */
     pen_hx = ( anchor_x - 0.5f ) * frg_scr_width - self_anchor_x * FRGLines[linenum].h_width;
-    FRGLineProperty.hy = (2 * anchor_y - 1 ) - self_anchor_y * (frg_fontsize) * 2. / frg_scr_height;
+    FRGLineProperty.hy = (2 * anchor_y - 1 ) - self_anchor_y * (frg_fontsize) * 2.f / frg_scr_height;
     /* vertical */
-    FRGLineProperty.vx = (2 * anchor_x - 1) - self_anchor_x * frg_fontsize * 2. / frg_scr_height;
+    FRGLineProperty.vx = (2 * anchor_x - 1) - self_anchor_x * frg_fontsize * 2.f / frg_scr_height;
     pen_vy = (anchor_y - 0.5f) * frg_scr_height + (1 - self_anchor_y) * FRGLines[linenum].v_height;
     //pen_vy = frg_scr_height / 2;
 
@@ -962,8 +960,8 @@ void frg_renderline(FRPLine * line,frp_time time){
 
     //move
     frg_mat_move(
-        frp_play_property_float_value(time,line->values,frg_ids_transX) * frg_fontsize * 2. / frg_scr_width,
-        frp_play_property_float_value(time,line->values,frg_ids_transY) * frg_fontsize * 2. / frg_scr_height,
+        frp_play_property_float_value(time,line->values,frg_ids_transX) * frg_fontsize * 2.f / frg_scr_width,
+        frp_play_property_float_value(time,line->values,frg_ids_transY) * frg_fontsize * 2.f / frg_scr_height,
         0,
         temp_mat
     );
@@ -978,21 +976,21 @@ void frg_renderline(FRPLine * line,frp_time time){
         pen_hx += nodearg->kerning_h_x_off;
         pen_vy += nodearg->kerning_v_y_off;
 
-        prop->h_x = pen_hx * 2. / frg_scr_width;
-        prop->v_y = pen_vy * 2. / frg_scr_height;
+        prop->h_x = pen_hx * 2.f / frg_scr_width;
+        prop->v_y = pen_vy * 2.f / frg_scr_height;
 
 
         float sanchorx = frp_play_property_float_value(time,n->values,frg_ids_self_anchor_x);
         float sanchory = frp_play_property_float_value(time,n->values,frg_ids_self_anchor_y);
 
 
-        float hcx = (pen_hx + nodearg->h_width * sanchorx) * 2. / frg_scr_width;
-        float hcy = FRGLineProperty.hy + frg_fontsize * sanchory * 2./frg_scr_height;//???
-        float vcx = FRGLineProperty.vx + frg_fontsize * sanchorx * 2./frg_scr_width;
-        float vcy = (pen_vy + nodearg->v_height * sanchory) * 2. / frg_scr_width;
+        float hcx = (pen_hx + nodearg->h_width * sanchorx) * 2.f / frg_scr_width;
+        float hcy = FRGLineProperty.hy + frg_fontsize * sanchory * 2.f/frg_scr_height;//???
+        float vcx = FRGLineProperty.vx + frg_fontsize * sanchorx * 2.f/frg_scr_width;
+        float vcy = (pen_vy + nodearg->v_height * sanchory) * 2.f / frg_scr_width;
 
-        float cx = (hcx - vcx) * cosf(FRGLineProperty.hv * 3.1415926) + vcx;
-        float cy = (vcy - hcy) * sinf(FRGLineProperty.hv * 3.1415926) + hcy;
+        float cx = (hcx - vcx) * cosf(FRGLineProperty.hv * 3.1415926f) + vcx;
+        float cy = (vcy - hcy) * sinf(FRGLineProperty.hv * 3.1415926f) + hcy;
 
         frg_mat_e(prop->trans);
         frg_mat_move(
@@ -1007,8 +1005,8 @@ void frg_renderline(FRPLine * line,frp_time time){
         frg_mat_move(cx,cy,0,temp_mat);
         frg_mat_mul(temp_mat,prop->trans);
         frg_mat_move(
-            frp_play_property_float_value(time,n->values,frg_ids_transX) * frg_fontsize * 2. / frg_scr_width,
-            frp_play_property_float_value(time,n->values,frg_ids_transY) * frg_fontsize * 2. / frg_scr_height,
+            frp_play_property_float_value(time,n->values,frg_ids_transX) * frg_fontsize * 2.f / frg_scr_width,
+            frp_play_property_float_value(time,n->values,frg_ids_transY) * frg_fontsize * 2.f / frg_scr_height,
             0,
             temp_mat
         );
@@ -1031,7 +1029,7 @@ void frg_renderline(FRPLine * line,frp_time time){
 
     /* save property to OpenGL buffer */
     glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_props);
-    glBufferSubData(GL_UNIFORM_BUFFER,0,sizeof(struct FRGNodeProperty) * i,FRGNodeProperties);
+    glBufferSubData(GL_UNIFORM_BUFFER,0,(int)sizeof(struct FRGNodeProperty) * i,FRGNodeProperties);
 
     glBindBuffer(GL_UNIFORM_BUFFER,frg_buffer_lineprop);
     glBufferSubData(GL_UNIFORM_BUFFER,0,sizeof(FRGLineProperty),&FRGLineProperty);
